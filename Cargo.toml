@@ -1,0 +1,64 @@
+[package]
+name = "humanoid-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Rust framework for humanoid robotics - simulator and control"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/humanoid-rs"
+
+[features]
+default = ["simulator", "unitree"]
+simulator = ["bevy", "bevy_rapier3d"]
+unitree = []
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.35", features = ["full", "rt-multi-thread"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Math
+nalgebra = "0.33"
+
+# Simulator (optional)
+bevy = { version = "0.13", optional = true }
+bevy_rapier3d = { version = "0.26", optional = true }
+
+# Communication
+tonic = "0.12"  # gRPC
+prost = "0.13"  # Protocol Buffers
+
+# Real-time control
+rtic = { version = "2.0", optional = true }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Testing
+mockall = "0.13"
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "control_loop"
+harness = false
+
+[[bin]]
+name = "humanoid-sim"
+path = "src/bin/simulator.rs"
+required-features = ["simulator"]
+
+[[bin]]
+name = "unitree-bridge"
+path = "src/bin/unitree_bridge.rs"
+required-features = ["unitree"]

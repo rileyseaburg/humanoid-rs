@@ -1,0 +1,32 @@
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Simulator assets (large files)
+/assets/models/*.obj
+/assets/models/*.fbx
+/assets/models/*.glb
+/assets/models/*.gltf
+
+# OS files
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+out/
