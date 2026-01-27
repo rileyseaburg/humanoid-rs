@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Math
-nalgebra = "0.33"
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
 
 # Simulator (optional)
 bevy = { version = "0.13", optional = true }
@@ -47,11 +47,11 @@ mockall = "0.13"
 
 [dev-dependencies]
 tokio-test = "0.4"
-criterion = { version = "0.5", features = ["html_reports"] }
+# criterion = { version = "0.5", features = ["html_reports"] }
 
-[[bench]]
-name = "control_loop"
-harness = false
+# [[bench]]
+# name = "control_loop"
+# harness = false
 
 [[bin]]
 name = "humanoid-sim"

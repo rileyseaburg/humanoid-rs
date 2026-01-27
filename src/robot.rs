@@ -201,7 +201,7 @@ pub mod unitree_g1 {
             let limits = JointLimits::default();
             joints.add_joint(Joint {
                 name,
-                joint_type: JointType::Revolute { axis: Vector3::y_axis() },
+                joint_type: JointType::Revolute { axis: *Vector3::y_axis() },
                 parent: None,
                 limits,
                 current_position: 0.0,

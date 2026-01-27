@@ -87,7 +87,7 @@ fn setup_simulator(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(Plane3d::default())),
-            material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
             transform: Transform::from_xyz(0.0, 0.0, 0.0)
                 .with_scale(Vec3::splat(10.0)),
             ..default()
@@ -110,7 +110,7 @@ fn spawn_robot_base(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Cuboid::new(0.3, 0.5, 0.2)),
-            material: materials.add(Color::srgb(0.8, 0.2, 0.2)),
+            material: materials.add(Color::rgb(0.8, 0.2, 0.2)),
             transform: Transform::from_xyz(0.0, 1.0, 0.0),
             ..default()
         },
@@ -128,11 +128,14 @@ fn update_robot_physics(
     time: Res<Time>,
     mut sim_robot: ResMut<SimulatedRobot>,
 ) {
-    let dt = Duration::from_secs_f64(time.delta_secs());
+    let dt = Duration::from_secs_f32(time.delta_seconds());
+    
+    // Clone state before mutable borrow
+    let state_clone = sim_robot.state.clone();
     
     // Update controller if present
     if let Some(ref mut controller) = sim_robot.controller {
-        match controller.update(&sim_robot.state, dt) {
+        match controller.update(&state_clone, dt) {
             Ok(output) => {
                 // Extract commands from controller output
                 sim_robot.commands = output.iter()
