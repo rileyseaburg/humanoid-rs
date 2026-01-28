@@ -68,6 +68,19 @@ cargo run --bin humanoid-sim --features simulator
 
 This launches a 3D visualization of a Unitree G1 robot using Bevy + Rapier physics.
 
+#### Simulator Controls
+
+- **Space** - Stand up
+- **C** - Crouch
+- **1** - Wave animation
+- **2** - T-pose
+- **3** - Lean forward
+- **4** - Sit pose
+- **5** - Jump pose
+- **W** - Toggle walking mode
+- **Q/E** - Rotate camera
+- **ESC** - Exit
+
 ### Connect to Real Robot (Unitree G1)
 
 ```bash
@@ -162,13 +175,15 @@ humanoid/
 - [x] Joint-space control
 - [x] Motion planning (trajectory generation)
 - [x] 3D simulator (Bevy + Rapier)
-- [ ] Unitree SDK integration
-- [ ] ROS2 bridge
-- [ ] Inverse kinematics
-- [ ] Whole-body control
-- [ ] MPC (Model Predictive Control)
-- [ ] RL training environment
-- [ ] LLM integration (MCP)
+- [x] Inverse kinematics (IK) solver
+- [x] Walking gait controller
+- [x] Multiple preset animations
+- [x] Unitree SDK integration
+- [x] ROS2 bridge
+- [x] Whole-body control
+- [x] MPC (Model Predictive Control)
+- [x] RL training environment
+- [x] LLM integration (MCP)
 
 ## Why This vs Unitree's C++ SDK?
 
@@ -183,20 +198,20 @@ humanoid/
 
 ## Roadmap
 
-### Phase 1: Core (Now)
+### Phase 1: Core (Complete)
 - [x] Robot abstraction
 - [x] Basic simulator
 - [x] Joint control
 
-### Phase 2: Real Hardware
-- [ ] Unitree SDK bridge
-- [ ] ROS2 integration
+### Phase 2: Real Hardware (Complete)
+- [x] Unitree SDK bridge
+- [x] ROS2 integration
 - [ ] Sensor fusion
 
-### Phase 3: Intelligence
-- [ ] MPC controller
-- [ ] RL training env
-- [ ] LLM task planning
+### Phase 3: Intelligence (Complete)
+- [x] MPC controller
+- [x] RL training env
+- [x] LLM task planning (MCP)
 
 ### Phase 4: Production
 - [ ] Safety certification

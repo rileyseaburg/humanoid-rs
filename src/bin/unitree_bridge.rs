@@ -1,4 +1,5 @@
 use humanoid_rs::unitree;
+use humanoid_rs::HumanoidRobot;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

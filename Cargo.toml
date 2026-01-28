@@ -11,6 +11,9 @@ repository = "https://github.com/yourusername/humanoid-rs"
 default = ["simulator", "unitree"]
 simulator = ["bevy", "bevy_rapier3d"]
 unitree = []
+ros2 = []
+rl = []
+mcp = []
 
 [dependencies]
 # Core async runtime

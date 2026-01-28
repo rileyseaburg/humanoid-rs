@@ -5,6 +5,9 @@
 
 pub mod robot;
 pub mod control;
+pub mod ik;
+pub mod whole_body;
+pub mod mpc;
 
 #[cfg(feature = "simulator")]
 pub mod simulator;
@@ -12,8 +15,20 @@ pub mod simulator;
 #[cfg(feature = "unitree")]
 pub mod unitree;
 
+#[cfg(feature = "ros2")]
+pub mod ros2;
+
+#[cfg(feature = "rl")]
+pub mod rl;
+
+#[cfg(feature = "mcp")]
+pub mod mcp;
+
 pub use robot::{HumanoidRobot, Joint, JointSet, Pose};
 pub use control::{Controller, Trajectory, MotionPlanner};
+pub use ik::{IkSolver, WholeBodyIk, PositionTarget, IkSolverConfig};
+pub use whole_body::{WholeBodyController, BalanceRecovery, ComState};
+pub use mpc::{MpcController, FootstepPlanner, LipmState};
 
 use thiserror::Error;
 
