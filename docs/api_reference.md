@@ -2,6 +2,12 @@
 
 Complete reference for all public types, traits, and functions in Humanoid-RS.
 
+**Version:** 0.2.0-alpha.1  
+**Repository:** https://github.com/rileyseaburg/humanoid-rs  
+**Author:** Riley Seaburg <riley@rileyseaburg.com>
+
+> **New to Humanoid-RS?** Start with [QUICKSTART.md](../../QUICKSTART.md) for a 5-minute introduction, then try the `starter.rs` example: `cargo run --example starter --features simulator`
+
 ## Core Module (`humanoid_rs`)
 
 ### Re-exports
@@ -66,7 +72,7 @@ fn move_joint(position: f64) -> Result<()> {
 
 ### Constants
 
-- `VERSION: &str` - Framework version from Cargo.toml
+- `VERSION: &str` - Framework version (currently "0.2.0-alpha.1")
 
 ## Robot Module (`humanoid_rs::robot`)
 
@@ -771,7 +777,7 @@ Enable features in `Cargo.toml`:
 
 ```toml
 [dependencies]
-humanoid-rs = { version = "0.1.0", features = ["simulator", "unitree"] }
+humanoid-rs = { version = "0.2.0-alpha.1", features = ["simulator", "unitree"] }
 ```
 
 Or on command line:

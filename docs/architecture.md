@@ -2,6 +2,12 @@
 
 This document describes the system architecture, data flow, and component interactions of the Humanoid-RS framework.
 
+**Version:** 0.2.0-alpha.1  
+**Repository:** https://github.com/rileyseaburg/humanoid-rs  
+**Author:** Riley Seaburg <riley@rileyseaburg.com>
+
+> **Getting Started:** New users should start with [QUICKSTART.md](../QUICKSTART.md) or the `starter.rs` example before diving into architecture details.
+
 ## Overview
 
 Humanoid-RS is a memory-safe, real-time robotics framework for humanoid robots built in Rust. It provides abstractions for robot control, motion planning, simulation, and hardware integration.

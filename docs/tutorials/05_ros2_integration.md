@@ -2,6 +2,8 @@
 
 This tutorial covers integrating Humanoid-RS with ROS2 (Robot Operating System 2).
 
+> **Quick Start:** New to Humanoid-RS? See [QUICKSTART.md](../../QUICKSTART.md) or try the `starter.rs` example first.
+
 ## Overview
 
 ROS2 provides:

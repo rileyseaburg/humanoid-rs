@@ -2,6 +2,8 @@
 
 This tutorial covers control algorithms for humanoid robots, from basic joint control to advanced whole-body coordination.
 
+> **Quick Start:** New to Humanoid-RS? Start with [QUICKSTART.md](../../QUICKSTART.md) or the `starter.rs` example.
+
 ## Overview
 
 Humanoid-RS provides several control approaches:

@@ -2,6 +2,8 @@
 
 This tutorial covers how to access and use sensor data from humanoid robots.
 
+> **Quick Start:** New to Humanoid-RS? See [QUICKSTART.md](../../QUICKSTART.md) or run `cargo run --example starter --features simulator`
+
 ## Overview
 
 Humanoid robots typically have these sensors:

@@ -2,6 +2,8 @@
 
 This tutorial covers how to use the 3D simulator for testing and development.
 
+> **Quick Start:** For a faster introduction, see [QUICKSTART.md](../../QUICKSTART.md) or run `cargo run --example starter --features simulator`
+
 ## Overview
 
 The Humanoid-RS simulator uses:

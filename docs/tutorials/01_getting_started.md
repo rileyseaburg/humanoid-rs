@@ -150,8 +150,10 @@ safety.trigger_estop("User requested")?;
 
 ## 5. Examples to Try
 
+The new `starter.rs` example is the recommended starting point for new users:
+
 ```bash
-# Basic simulation
+# Complete SDK demonstration (recommended for beginners)
 cargo run --example starter --features simulator
 
 # Control loop demo
@@ -208,20 +210,24 @@ my_robot/
 
 ## 8. Next Steps
 
-1. **Read the Tutorials**
+1. **Quick Start**
+   - For a fast 5-minute introduction, see [QUICKSTART.md](../../QUICKSTART.md)
+
+2. **Read the Tutorials**
    - Tutorial 2: Running Simulations
    - Tutorial 3: Controlling Robots
    - Tutorial 4: Sensors and Observability
 
-2. **Explore Examples**
-   - Check `examples/` directory
+3. **Explore Examples**
+   - Start with: `cargo run --example starter --features simulator`
+   - Check `examples/` directory for more
    - Each example demonstrates different features
 
-3. **API Documentation**
+4. **API Documentation**
    - Run: `cargo doc --open`
    - Or read: `docs/api_reference.md`
 
-4. **Build Something!**
+5. **Build Something!**
    - Try different robot profiles
    - Experiment with configurations
    - Add custom control logic
@@ -256,6 +262,7 @@ cargo test
 **That's it!** You're ready to build with Humanoid-RS. Check the other tutorials for deeper dives into specific features.
 
 Need help? Check:
+- [QUICKSTART.md](../../QUICKSTART.md) - 5-minute quick start guide
 - [API Reference](api_reference.md)
-- [Examples](../../examples/)
+- [Examples](../../examples/) - Start with `starter.rs`
 - [GitHub Issues](https://github.com/rileyseaburg/humanoid-rs/issues)
