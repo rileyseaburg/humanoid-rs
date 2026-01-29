@@ -236,6 +236,54 @@ impl MockRobot {
         self.emergency_stop_active
     }
 
+    pub fn reset_emergency_stop(&mut self) {
+        self.emergency_stop_active = false;
+    }
+
+    pub fn set_joint_velocities(&mut self, velocities: &[f64]) -> Result<(), String> {
+        if self.emergency_stop_active {
+            return Err("Emergency stop active".to_string());
+        }
+
+        if velocities.len() != self.state.joints.iter().count() {
+            return Err("Velocity count mismatch".to_string());
+        }
+
+        for (joint, &vel) in self.state.joints.iter_mut().zip(velocities.iter()) {
+            if vel.abs() > joint.limits.max_velocity {
+                return Err(format!(
+                    "Joint {} velocity {} exceeds limit {}",
+                    joint.name, vel, joint.limits.max_velocity
+                ));
+            }
+            joint.velocity = vel;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_joint_efforts(&mut self, efforts: &[f64]) -> Result<(), String> {
+        if self.emergency_stop_active {
+            return Err("Emergency stop active".to_string());
+        }
+
+        if efforts.len() != self.state.joints.iter().count() {
+            return Err("Effort count mismatch".to_string());
+        }
+
+        for (joint, &eff) in self.state.joints.iter_mut().zip(efforts.iter()) {
+            if eff.abs() > joint.limits.max_effort {
+                return Err(format!(
+                    "Joint {} effort {} exceeds limit {}",
+                    joint.name, eff, joint.limits.max_effort
+                ));
+            }
+            joint.effort = eff;
+        }
+
+        Ok(())
+    }
+
     pub fn command_history(&self) -> &[Vec<f64>] {
         &self.command_history
     }

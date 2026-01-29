@@ -34,4 +34,4 @@ out/
 # Generated sites and archives
 *.zip
 changelog-site/
-docs-site/
+# docs-site/  # Commented out for GitHub Pages deployment

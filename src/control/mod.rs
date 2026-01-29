@@ -569,6 +569,20 @@ impl JointSpaceController {
     pub fn safety_manager_mut(&mut self) -> Option<&mut SafetyManager> {
         self.safety_manager.as_mut()
     }
+
+    /// Set target trajectory (for backward compatibility with tests)
+    pub fn set_trajectory(&mut self, trajectory: Trajectory) {
+        self.trajectory = Some(trajectory);
+        self.current_time = Duration::from_secs(0);
+    }
+
+    /// Check if trajectory is complete (for backward compatibility with tests)
+    pub fn is_complete(&self) -> bool {
+        match &self.trajectory {
+            None => true,
+            Some(traj) => self.current_time >= traj.duration(),
+        }
+    }
 }
 
 impl Controller for JointSpaceController {

@@ -13,15 +13,17 @@
 //! - Torque control (direct)
 
 use crate::robot::unitree_g1;
-use crate::sim::scene::ActiveScene;
-// TODO: Import these when modules are fully implemented
-// use crate::sim::assets::{AssetFormat, SceneConfig, SceneLoader};
-// use crate::sim::deterministic::TimestepMode;
-// use crate::sim::scene::{NodeType, SceneGraph, SceneNode};
+use crate::sim::assets::{AssetFormat, SceneLoader};
+use crate::sim::deterministic::{
+    DeterministicScheduler, SimulationClock, SimulationControl, Subsystem, TickConfig, TimestepMode,
+};
+use crate::sim::scene::{ActiveScene, SceneGraph};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use std::f32::consts::PI;
 use std::path::PathBuf;
+use std::time::Duration;
+use tracing::{debug, info, warn};
 
 const ROBOT_GROUP: Group = Group::GROUP_1;
 const GROUND_GROUP: Group = Group::GROUP_2;
@@ -42,6 +44,10 @@ pub struct PhysicsConfig {
     pub position_kd: f32,
     /// Timestep mode for deterministic simulation control
     pub timestep_mode: TimestepMode,
+    /// Deterministic scheduler for controlling physics, sensors, and control loops
+    pub scheduler: Option<DeterministicScheduler>,
+    /// Accumulated time for fixed timestep updates
+    pub accumulated_time: Duration,
 }
 
 impl Default for PhysicsConfig {
@@ -57,6 +63,8 @@ impl Default for PhysicsConfig {
                 dt: 1.0 / 500.0,
                 substeps: 4,
             },
+            scheduler: None,
+            accumulated_time: Duration::ZERO,
         }
     }
 }
@@ -736,7 +744,7 @@ fn setup_physics_scene(
         PbrBundle {
             mesh: meshes.add(Plane3d::default().mesh().size(20.0, 20.0)),
             material: materials.add(StandardMaterial {
-                base_color: Color::rgb(0.3, 0.35, 0.3),
+                base_color: Color::srgb(0.3, 0.35, 0.3),
                 ..default()
             }),
             ..default()
@@ -749,19 +757,19 @@ fn setup_physics_scene(
 
     // Materials for robot
     let body_material = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.15, 0.15, 0.2),
+        base_color: Color::srgb(0.15, 0.15, 0.2),
         metallic: 0.8,
         ..default()
     });
 
     let joint_material = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.8, 0.4, 0.1),
+        base_color: Color::srgb(0.8, 0.4, 0.1),
         metallic: 0.9,
         ..default()
     });
 
     let foot_material = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.3, 0.3, 0.35),
+        base_color: Color::srgb(0.3, 0.3, 0.35),
         metallic: 0.5,
         ..default()
     });
@@ -1286,28 +1294,28 @@ fn handle_keyboard_input(
         for mode in commands_res.control_modes.iter_mut() {
             *mode = ControlMode::Position;
         }
-        println!("Switched to Position control mode");
+        info!("Switched to Position control mode");
     }
     if keyboard.just_pressed(KeyCode::Digit2) {
         ui_state.control_mode_global = ControlMode::Velocity;
         for mode in commands_res.control_modes.iter_mut() {
             *mode = ControlMode::Velocity;
         }
-        println!("Switched to Velocity control mode");
+        info!("Switched to Velocity control mode");
     }
     if keyboard.just_pressed(KeyCode::Digit3) {
         ui_state.control_mode_global = ControlMode::Torque;
         for mode in commands_res.control_modes.iter_mut() {
             *mode = ControlMode::Torque;
         }
-        println!("Switched to Torque control mode");
+        info!("Switched to Torque control mode");
     }
     if keyboard.just_pressed(KeyCode::Digit4) {
         ui_state.control_mode_global = ControlMode::Passive;
         for mode in commands_res.control_modes.iter_mut() {
             *mode = ControlMode::Passive;
         }
-        println!("Switched to Passive mode (no control)");
+        info!("Switched to Passive mode (no control)");
     }
 
     // Joint selection (Q/E to cycle)
@@ -1334,7 +1342,7 @@ fn handle_keyboard_input(
         for pos in commands_res.target_positions.iter_mut() {
             *pos = 0.0;
         }
-        println!("Reset all joint targets to zero");
+        info!("Reset all joint targets to zero");
     }
 
     // Toggle joint info display
@@ -1350,7 +1358,7 @@ impl Plugin for FullPhysicsSimulatorPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PhysicsSimulatorPlugin)
             .add_plugins(RapierDebugRenderPlugin::default())
-            .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.15)))
+            .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.15)))
             .init_resource::<SimulatorUiState>()
             .add_systems(Startup, (setup_camera_and_lights, spawn_orbit_camera))
             .add_systems(
@@ -1468,7 +1476,6 @@ fn print_controls_once(mut ran: Local<bool>) {
     println!("===================================\n");
 }
 
-/* TODO: Re-enable when scene loading is fully implemented
 /// Load a scene from a TOML or JSON file
 pub fn load_scene_file(path: &std::path::Path) -> Result<SceneGraph, String> {
     let mut loader = SceneLoader::new();
@@ -1492,7 +1499,6 @@ pub fn load_scene_json(json_str: &str) -> Result<SceneGraph, String> {
         .load_from_str(AssetFormat::Json, json_str)
         .map_err(|e| format!("Failed to parse JSON: {}", e))
 }
-*/
 
 /// Plugin for loading scenes from files
 pub struct SceneLoaderPlugin {
@@ -1513,7 +1519,6 @@ impl SceneLoaderPlugin {
     }
 }
 
-/* TODO: Re-enable when scene loading is fully implemented
 impl Plugin for SceneLoaderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ActiveScene>();
@@ -1529,7 +1534,6 @@ impl Plugin for SceneLoaderPlugin {
         }
     }
 }
-*/
 
 impl Default for SceneLoaderPlugin {
     fn default() -> Self {
@@ -1537,7 +1541,6 @@ impl Default for SceneLoaderPlugin {
     }
 }
 
-/* TODO: Re-enable when scene loading is fully implemented
 /// System to spawn entities from a loaded scene graph
 fn spawn_scene_entities(
     mut commands: Commands,
@@ -1565,7 +1568,7 @@ fn spawn_scene_entities(
                         PbrBundle {
                             mesh: meshes.add(Plane3d::default().mesh().size(20.0, 20.0)),
                             material: materials.add(StandardMaterial {
-                                base_color: Color::rgb(0.3, 0.35, 0.3),
+                                base_color: Color::srgb(0.3, 0.35, 0.3),
                                 ..default()
                             }),
                             ..default()
@@ -1626,7 +1629,7 @@ fn spawn_scene_entities(
                         PbrBundle {
                             mesh: meshes.add(Cuboid::new(sx, sy, sz)),
                             material: materials.add(StandardMaterial {
-                                base_color: Color::rgb(r, g, b),
+                                base_color: Color::srgb(r, g, b),
                                 ..default()
                             }),
                             transform: Transform {
@@ -1659,6 +1662,132 @@ fn spawn_scene_entities(
                         entity.insert(Friction::coefficient(friction));
                     }
                 }
+                "Sphere" => {
+                    let radius = obstacle_node
+                        .get_property("radius")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.5) as f32;
+
+                    let r = obstacle_node
+                        .get_property("color_r")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+                    let g = obstacle_node
+                        .get_property("color_g")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+                    let b = obstacle_node
+                        .get_property("color_b")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+
+                    let is_static = obstacle_node
+                        .get_property("static")
+                        .map(|s| s == "true")
+                        .unwrap_or(true);
+
+                    let mut entity = commands.spawn((
+                        PbrBundle {
+                            mesh: meshes.add(Sphere::new(radius)),
+                            material: materials.add(StandardMaterial {
+                                base_color: Color::srgb(r, g, b),
+                                ..default()
+                            }),
+                            transform: Transform {
+                                translation: position,
+                                rotation,
+                                ..default()
+                            },
+                            ..default()
+                        },
+                        Collider::ball(radius),
+                        CollisionGroups::new(GROUND_GROUP, ROBOT_GROUP),
+                    ));
+
+                    if is_static {
+                        entity.insert(RigidBody::Fixed);
+                    } else {
+                        entity.insert(RigidBody::Dynamic);
+                        if let Some(mass) = obstacle_node
+                            .get_property("mass")
+                            .and_then(|m| m.parse::<f32>().ok())
+                        {
+                            entity.insert(ColliderMassProperties::Mass(mass));
+                        }
+                    }
+
+                    if let Some(friction) = obstacle_node
+                        .get_property("friction")
+                        .and_then(|f| f.parse().ok())
+                    {
+                        entity.insert(Friction::coefficient(friction));
+                    }
+                }
+                "Cylinder" => {
+                    let radius = obstacle_node
+                        .get_property("radius")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.5) as f32;
+                    let height = obstacle_node
+                        .get_property("height")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(1.0) as f32;
+
+                    let r = obstacle_node
+                        .get_property("color_r")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+                    let g = obstacle_node
+                        .get_property("color_g")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+                    let b = obstacle_node
+                        .get_property("color_b")
+                        .and_then(|c| c.parse().ok())
+                        .unwrap_or(0.5) as f32;
+
+                    let is_static = obstacle_node
+                        .get_property("static")
+                        .map(|s| s == "true")
+                        .unwrap_or(true);
+
+                    let mut entity = commands.spawn((
+                        PbrBundle {
+                            mesh: meshes.add(Cylinder::new(radius, height)),
+                            material: materials.add(StandardMaterial {
+                                base_color: Color::srgb(r, g, b),
+                                ..default()
+                            }),
+                            transform: Transform {
+                                translation: position,
+                                rotation,
+                                ..default()
+                            },
+                            ..default()
+                        },
+                        Collider::cylinder(height / 2.0, radius),
+                        CollisionGroups::new(GROUND_GROUP, ROBOT_GROUP),
+                    ));
+
+                    if is_static {
+                        entity.insert(RigidBody::Fixed);
+                    } else {
+                        entity.insert(RigidBody::Dynamic);
+                        if let Some(mass) = obstacle_node
+                            .get_property("mass")
+                            .and_then(|m| m.parse::<f32>().ok())
+                        {
+                            entity.insert(ColliderMassProperties::Mass(mass));
+                        }
+                    }
+
+                    if let Some(friction) = obstacle_node
+                        .get_property("friction")
+                        .and_then(|f| f.parse().ok())
+                    {
+                        entity.insert(Friction::coefficient(friction));
+                    }
+                }
                 _ => {
                     // Other obstacle types not yet implemented
                 }
@@ -1666,7 +1795,6 @@ fn spawn_scene_entities(
         }
     }
 }
-*/
 
 /// Run the physics simulator
 pub fn run_physics_simulator() {
@@ -1684,7 +1812,6 @@ pub fn run_physics_simulator() {
         .run();
 }
 
-/* TODO: Re-enable when scene loading is fully implemented
 /// Run the physics simulator with a scene file
 pub fn run_physics_simulator_with_scene(scene_path: impl Into<PathBuf>) {
     let path = scene_path.into();
@@ -1703,7 +1830,6 @@ pub fn run_physics_simulator_with_scene(scene_path: impl Into<PathBuf>) {
         .add_systems(Update, bevy::window::close_on_esc)
         .run();
 }
-*/
 
 #[cfg(test)]
 mod tests {

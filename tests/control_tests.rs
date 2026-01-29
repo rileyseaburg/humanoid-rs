@@ -2,7 +2,10 @@
 //!
 //! Tests for PD controllers, trajectory following, and safety mechanisms.
 
-use humanoid_rs::control::{Controller, JointSpaceController, MotionPlanner, Trajectory, Waypoint};
+use humanoid_rs::control::{
+    ControlCommand, ControlState, Controller, JointSpaceController, MotionPlanner, Trajectory,
+    Waypoint,
+};
 use humanoid_rs::robot::{unitree_g1, JointSet, Pose};
 use std::time::Duration;
 
@@ -16,27 +19,22 @@ fn test_pd_controller_convergence() {
     let kd = 10.0;
     let mut controller = JointSpaceController::new(kp, kd);
 
-    let mut state = RobotState::default();
-    state.joints = unitree_g1::create_default_joints();
+    // Create initial control state
+    let mut positions = vec![0.0; unitree_g1::NUM_JOINTS];
+    let velocities = vec![0.0; unitree_g1::NUM_JOINTS];
+    let efforts = vec![0.0; unitree_g1::NUM_JOINTS];
+
+    let mut state = ControlState::new(
+        Duration::from_secs(0),
+        positions.clone(),
+        velocities.clone(),
+        efforts.clone(),
+    );
 
     // Set target trajectory to move all joints to 0.5
-    let mut target = JointSet::new();
-    for i in 0..unitree_g1::NUM_JOINTS {
-        target.add_joint(humanoid_rs::robot::Joint {
-            name: format!("joint_{}", i),
-            joint_type: humanoid_rs::robot::JointType::Revolute {
-                axis: nalgebra::Vector3::y_axis().into_inner(),
-            },
-            parent: None,
-            limits: Default::default(),
-            current_position: 0.5,
-            target_position: 0.5,
-            velocity: 0.0,
-            effort: 0.0,
-        });
-    }
-
-    let trajectory = create_trajectory_to_target(&target, Duration::from_secs(2));
+    let target_positions = vec![0.5; unitree_g1::NUM_JOINTS];
+    let trajectory =
+        create_trajectory_to_target_positions(&target_positions, Duration::from_secs(2));
     controller.set_trajectory(trajectory);
 
     // Simulate for 2 seconds
@@ -47,19 +45,22 @@ fn test_pd_controller_convergence() {
         let result = controller.update(&state, dt);
         assert!(result.is_ok());
 
-        let output = result.unwrap();
+        let cmd = result.unwrap();
 
         // Simulate simple dynamics: update position based on effort
-        for (joint_out, joint_state) in output.iter().zip(state.joints.iter_mut()) {
-            joint_state.effort = joint_out.effort;
-            joint_state.velocity = joint_out.effort * 0.01; // Simple integration
-            joint_state.current_position += joint_state.velocity * dt.as_secs_f64();
+        if let Some(ref cmd_efforts) = cmd.joint_efforts {
+            for (i, effort) in cmd_efforts.iter().enumerate() {
+                if i < state.actual_positions.len() {
+                    let velocity = effort * 0.01; // Simple integration
+                    state.actual_velocities[i] = velocity;
+                    state.actual_positions[i] += velocity * dt.as_secs_f64();
+                }
+            }
         }
     }
 
     // Check that positions converged toward targets
-    let target_positions = target.positions();
-    let final_positions = state.joints.positions();
+    let final_positions = &state.actual_positions;
 
     for (i, (target_pos, final_pos)) in target_positions
         .iter()
@@ -89,27 +90,23 @@ fn test_pd_controller_gains() {
 
     for (kp, kd, name) in test_cases {
         let mut controller = JointSpaceController::new(kp, kd);
-        let mut state = RobotState::default();
-        state.joints = unitree_g1::create_default_joints();
+
+        // Create initial control state
+        let mut positions = vec![0.0; unitree_g1::NUM_JOINTS];
+        let velocities = vec![0.0; unitree_g1::NUM_JOINTS];
+        let efforts = vec![0.0; unitree_g1::NUM_JOINTS];
+
+        let mut state = ControlState::new(
+            Duration::from_secs(0),
+            positions.clone(),
+            velocities.clone(),
+            efforts.clone(),
+        );
 
         // Set target
-        let mut target = JointSet::new();
-        for _ in 0..unitree_g1::NUM_JOINTS {
-            target.add_joint(humanoid_rs::robot::Joint {
-                name: "test".to_string(),
-                joint_type: humanoid_rs::robot::JointType::Revolute {
-                    axis: nalgebra::Vector3::y_axis().into_inner(),
-                },
-                parent: None,
-                limits: Default::default(),
-                current_position: 0.3,
-                target_position: 0.3,
-                velocity: 0.0,
-                effort: 0.0,
-            });
-        }
-
-        let trajectory = create_trajectory_to_target(&target, Duration::from_secs(1));
+        let target_positions = vec![0.3; unitree_g1::NUM_JOINTS];
+        let trajectory =
+            create_trajectory_to_target_positions(&target_positions, Duration::from_secs(1));
         controller.set_trajectory(trajectory);
 
         let dt = Duration::from_millis(10);
@@ -119,13 +116,19 @@ fn test_pd_controller_gains() {
             let result = controller.update(&state, dt).unwrap();
 
             // Track maximum effort
-            for joint in result.iter() {
-                max_effort = max_effort.max(joint.effort.abs());
+            if let Some(ref cmd_efforts) = result.joint_efforts {
+                for effort in cmd_efforts.iter() {
+                    max_effort = max_effort.max(effort.abs());
+                }
             }
 
             // Simple state update
-            for (out, state_joint) in result.iter().zip(state.joints.iter_mut()) {
-                state_joint.current_position += out.effort * 0.001;
+            if let Some(ref cmd_efforts) = result.joint_efforts {
+                for (i, effort) in cmd_efforts.iter().enumerate() {
+                    if i < state.actual_positions.len() {
+                        state.actual_positions[i] += effort * 0.001;
+                    }
+                }
             }
         }
 
@@ -253,30 +256,20 @@ fn test_controller_is_complete() {
     assert!(controller.is_complete());
 
     // With trajectory, should not be complete initially
-    let mut target = JointSet::new();
-    for _ in 0..unitree_g1::NUM_JOINTS {
-        target.add_joint(humanoid_rs::robot::Joint {
-            name: "test".to_string(),
-            joint_type: humanoid_rs::robot::JointType::Revolute {
-                axis: nalgebra::Vector3::y_axis().into_inner(),
-            },
-            parent: None,
-            limits: Default::default(),
-            current_position: 0.5,
-            target_position: 0.5,
-            velocity: 0.0,
-            effort: 0.0,
-        });
-    }
-
-    let trajectory = create_trajectory_to_target(&target, Duration::from_millis(100));
+    let target_positions = vec![0.5; unitree_g1::NUM_JOINTS];
+    let trajectory =
+        create_trajectory_to_target_positions(&target_positions, Duration::from_millis(100));
     controller.set_trajectory(trajectory);
 
     assert!(!controller.is_complete());
 
     // After running past duration, should be complete
-    let mut state = RobotState::default();
-    state.joints = unitree_g1::create_default_joints();
+    let state = ControlState::new(
+        Duration::from_secs(0),
+        vec![0.0; unitree_g1::NUM_JOINTS],
+        vec![0.0; unitree_g1::NUM_JOINTS],
+        vec![0.0; unitree_g1::NUM_JOINTS],
+    );
 
     for _ in 0..20 {
         // 200ms at 10ms steps

@@ -8,7 +8,7 @@
 //!
 //! All sensor data includes proper timestamps and follows ROS2 conventions for units.
 
-use nalgebra::{Const, Quaternion, UnitQuaternion, Vector3, Vector6, U1};
+use nalgebra::{UnitQuaternion, Vector3};
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 /// Sensor trait that all sensors must implement
 pub trait Sensor: Send + Sync {
     /// Update sensor data from physics backend
-    fn update(&mut self, physics: &dyn PhysicsBackend, dt: Duration);
+    fn update(&mut self, physics: &dyn SensorPhysicsBackend, dt: Duration);
     /// Get current sensor data
     fn data(&self) -> SensorData;
     /// Reset sensor to initial state
@@ -345,7 +345,11 @@ impl NoiseModel {
 }
 
 /// Physics backend trait for sensor queries
-pub trait PhysicsBackend {
+///
+/// This trait defines the interface that physics engines must implement
+/// to support sensor simulations. It provides methods for querying the
+/// physical state of the robot and environment.
+pub trait SensorPhysicsBackend {
     /// Get the base (pelvis) transform and velocity
     fn get_base_state(&self) -> Option<(Transform3D, Velocity)>;
     /// Get joint state by index
@@ -551,7 +555,7 @@ impl ImuSensor {
 }
 
 impl Sensor for ImuSensor {
-    fn update(&mut self, physics: &dyn PhysicsBackend, dt: Duration) {
+    fn update(&mut self, physics: &dyn SensorPhysicsBackend, dt: Duration) {
         self.last_update = physics.simulation_time();
         self.update_bias(dt);
 
@@ -711,7 +715,7 @@ impl JointEncoderSensor {
 }
 
 impl Sensor for JointEncoderSensor {
-    fn update(&mut self, physics: &dyn PhysicsBackend, _dt: Duration) {
+    fn update(&mut self, physics: &dyn SensorPhysicsBackend, _dt: Duration) {
         self.last_update = physics.simulation_time();
         let mut joint_data = JointEncoderData::with_names(
             self.data.data.joints.len(),
@@ -822,7 +826,7 @@ impl ForceTorqueSensor {
 }
 
 impl Sensor for ForceTorqueSensor {
-    fn update(&mut self, physics: &dyn PhysicsBackend, _dt: Duration) {
+    fn update(&mut self, physics: &dyn SensorPhysicsBackend, _dt: Duration) {
         self.last_update = physics.simulation_time();
 
         if let Some(contact) = physics.get_contact_state(&self.config.body_name) {
@@ -974,7 +978,7 @@ impl CameraSensor {
 }
 
 impl Sensor for CameraSensor {
-    fn update(&mut self, physics: &dyn PhysicsBackend, _dt: Duration) {
+    fn update(&mut self, physics: &dyn SensorPhysicsBackend, _dt: Duration) {
         self.last_update = physics.simulation_time();
         self.frame_count += 1;
 
@@ -1103,7 +1107,7 @@ impl SensorRegistry {
     }
 
     /// Update all sensors that need updating
-    pub fn update(&mut self, physics: &dyn PhysicsBackend, dt: Duration) {
+    pub fn update(&mut self, physics: &dyn SensorPhysicsBackend, dt: Duration) {
         let now = physics.simulation_time();
 
         for sensor in &mut self.sensors {
@@ -1128,7 +1132,7 @@ impl SensorRegistry {
     pub fn update_sensor(
         &mut self,
         name: &str,
-        physics: &dyn PhysicsBackend,
+        physics: &dyn SensorPhysicsBackend,
         dt: Duration,
     ) -> bool {
         if let Some(sensor) = self.sensors.iter_mut().find(|s| s.name() == name) {
@@ -1222,12 +1226,12 @@ impl Default for SensorSync {
 mod tests {
     use super::*;
 
-    struct MockPhysicsBackend {
+    struct MockSensorPhysicsBackend {
         time: Instant,
         base_state: Option<(Transform3D, Velocity)>,
     }
 
-    impl MockPhysicsBackend {
+    impl MockSensorPhysicsBackend {
         fn new() -> Self {
             Self {
                 time: Instant::now(),
@@ -1236,7 +1240,7 @@ mod tests {
         }
     }
 
-    impl PhysicsBackend for MockPhysicsBackend {
+    impl SensorPhysicsBackend for MockSensorPhysicsBackend {
         fn get_base_state(&self) -> Option<(Transform3D, Velocity)> {
             self.base_state
         }
@@ -1293,7 +1297,7 @@ mod tests {
     fn test_imu_sensor() {
         let config = ImuConfig::default();
         let mut imu = ImuSensor::new("test_imu", config);
-        let physics = MockPhysicsBackend::new();
+        let physics = MockSensorPhysicsBackend::new();
 
         imu.update(&physics, Duration::from_millis(1));
 
@@ -1308,7 +1312,7 @@ mod tests {
             ..Default::default()
         };
         let mut encoder = JointEncoderSensor::new("test_encoder", config);
-        let physics = MockPhysicsBackend::new();
+        let physics = MockSensorPhysicsBackend::new();
 
         encoder.update(&physics, Duration::from_millis(1));
 
@@ -1328,7 +1332,7 @@ mod tests {
         assert_eq!(registry.len(), 1);
         assert!(registry.get_sensor("pelvis_imu").is_some());
 
-        let physics = MockPhysicsBackend::new();
+        let physics = MockSensorPhysicsBackend::new();
         registry.update(&physics, Duration::from_millis(1));
 
         let data = registry.get_data("pelvis_imu");
@@ -1361,16 +1365,17 @@ mod tests {
     #[test]
     fn test_sensor_reset() {
         let mut imu = ImuSensor::new("test", ImuConfig::default());
-        let physics = MockPhysicsBackend::new();
+        let physics = MockSensorPhysicsBackend::new();
 
         imu.update(&physics, Duration::from_millis(1));
         imu.reset();
 
         let data = imu.data();
         // After reset, orientation should be identity
-        assert!(data.data.orientation.i().abs() < 0.001);
-        assert!(data.data.orientation.j().abs() < 0.001);
-        assert!(data.data.orientation.k().abs() < 0.001);
+        let quat = data.data.orientation.quaternion();
+        assert!(quat.i.abs() < 0.001);
+        assert!(quat.j.abs() < 0.001);
+        assert!(quat.k.abs() < 0.001);
     }
 
     #[test]

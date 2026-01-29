@@ -159,7 +159,75 @@ pub enum QosProfile {
     Default,
 }
 
-/// Module for standalone message types (used without ros2 feature)
+/// Standard ROS2 topic names for humanoid robots
+pub mod topics {
+    pub const JOINT_STATES: &str = "/joint_states";
+    pub const CMD_VEL: &str = "/cmd_vel";
+    pub const ODOM: &str = "/odom";
+    pub const IMU: &str = "/imu/data";
+    pub const JOINT_TRAJECTORY: &str = "/joint_trajectory_controller/joint_trajectory";
+    pub const TF: &str = "/tf";
+    pub const TF_STATIC: &str = "/tf_static";
+    pub const JOINT_COMMANDS: &str = "/joint_commands";
+    pub const EMERGENCY_STOP: &str = "/emergency_stop";
+}
+
+/// Standard ROS2 frame IDs
+pub mod frames {
+    pub const WORLD: &str = "world";
+    pub const ODOM: &str = "odom";
+    pub const BASE_LINK: &str = "base_link";
+    pub const BASE_FOOTPRINT: &str = "base_footprint";
+    pub const PELVIS: &str = "pelvis";
+    pub const LEFT_FOOT: &str = "left_foot";
+    pub const RIGHT_FOOT: &str = "right_foot";
+}
+
+/// Launch file configuration
+#[derive(Debug, Clone)]
+pub struct LaunchConfig {
+    pub node_name: String,
+    pub namespace: String,
+    pub clock_mode: ClockMode,
+    pub timing_policy: TimingPolicy,
+    pub parameters: HashMap<String, String>,
+}
+
+impl Default for LaunchConfig {
+    fn default() -> Self {
+        Self {
+            node_name: "humanoid_ros_node".to_string(),
+            namespace: "/humanoid".to_string(),
+            clock_mode: ClockMode::WallTime,
+            timing_policy: TimingPolicy::default(),
+            parameters: HashMap::new(),
+        }
+    }
+}
+
+impl LaunchConfig {
+    /// Load from parameter file (YAML)
+    pub fn from_parameter_file(path: &str) -> Result<Self> {
+        println!("[ROS2] Loading parameters from: {}", path);
+        Ok(Self::default())
+    }
+
+    /// Set a parameter
+    pub fn set_parameter(&mut self, key: &str, value: &str) {
+        self.parameters.insert(key.to_string(), value.to_string());
+    }
+
+    /// Get a parameter
+    pub fn get_parameter(&self, key: &str) -> Option<&String> {
+        self.parameters.get(key)
+    }
+}
+
+// =============================================================================
+// STANDALONE IMPLEMENTATION (without ros2 feature)
+// =============================================================================
+
+#[cfg(not(feature = "ros2"))]
 pub mod msg {
     use super::*;
 
@@ -325,12 +393,14 @@ pub mod msg {
 }
 
 /// Standalone topic publisher (used without ros2 feature)
+#[cfg(not(feature = "ros2"))]
 pub struct Publisher<T> {
     topic_name: String,
     qos: QosProfile,
     _phantom: std::marker::PhantomData<T>,
 }
 
+#[cfg(not(feature = "ros2"))]
 impl<T> Publisher<T> {
     pub fn new(topic_name: &str, qos: QosProfile) -> Self {
         Self {
@@ -351,6 +421,7 @@ impl<T> Publisher<T> {
 }
 
 /// Standalone topic subscriber (used without ros2 feature)
+#[cfg(not(feature = "ros2"))]
 pub struct Subscriber<T> {
     topic_name: String,
     qos: QosProfile,
@@ -358,6 +429,7 @@ pub struct Subscriber<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
+#[cfg(not(feature = "ros2"))]
 impl<T: Clone + 'static> Subscriber<T> {
     pub fn new(topic_name: &str, qos: QosProfile) -> Self {
         Self {
@@ -378,12 +450,14 @@ impl<T: Clone + 'static> Subscriber<T> {
 }
 
 /// ROS2 service server
+#[cfg(not(feature = "ros2"))]
 pub struct ServiceServer<Req, Res> {
     service_name: String,
     handler: Option<Box<dyn Fn(Req) -> Result<Res> + Send + Sync>>,
     _phantom: std::marker::PhantomData<(Req, Res)>,
 }
 
+#[cfg(not(feature = "ros2"))]
 impl<Req: 'static, Res: 'static> ServiceServer<Req, Res> {
     pub fn new(service_name: &str) -> Self {
         Self {
@@ -399,6 +473,7 @@ impl<Req: 'static, Res: 'static> ServiceServer<Req, Res> {
 }
 
 /// ROS2 bridge for humanoid robot (standalone implementation)
+#[cfg(not(feature = "ros2"))]
 pub struct Ros2Bridge {
     node_name: String,
     namespace: String,
@@ -422,6 +497,7 @@ pub struct Ros2Bridge {
     clock: RosClock,
 }
 
+#[cfg(not(feature = "ros2"))]
 impl Ros2Bridge {
     /// Create a new ROS2 bridge
     pub fn new(node_name: &str, namespace: &str) -> Self {
@@ -532,12 +608,14 @@ impl Ros2Bridge {
 }
 
 /// ROS2 action for trajectory execution
+#[cfg(not(feature = "ros2"))]
 pub struct FollowJointTrajectoryAction {
     action_name: String,
     is_executing: Arc<Mutex<bool>>,
     current_goal: Arc<Mutex<Option<msg::JointTrajectory>>>,
 }
 
+#[cfg(not(feature = "ros2"))]
 impl FollowJointTrajectoryAction {
     pub fn new(action_name: &str) -> Self {
         Self {
@@ -589,85 +667,353 @@ impl FollowJointTrajectoryAction {
     }
 }
 
-/// Standard ROS2 topic names for humanoid robots
-pub mod topics {
-    pub const JOINT_STATES: &str = "/joint_states";
-    pub const CMD_VEL: &str = "/cmd_vel";
-    pub const ODOM: &str = "/odom";
-    pub const IMU: &str = "/imu/data";
-    pub const JOINT_TRAJECTORY: &str = "/joint_trajectory_controller/joint_trajectory";
-    pub const TF: &str = "/tf";
-    pub const TF_STATIC: &str = "/tf_static";
-    pub const JOINT_COMMANDS: &str = "/joint_commands";
-    pub const EMERGENCY_STOP: &str = "/emergency_stop";
+// =============================================================================
+// FULL RCLRS IMPLEMENTATION (with ros2 feature)
+// =============================================================================
+
+#[cfg(feature = "ros2")]
+use rclrs::{
+    Clock as RclClock, Context, Node, Publisher as RclPublisher, QosProfile as RclQosProfile,
+    RclrsError, Subscription,
+};
+
+/// Main ROS2 node for humanoid robot integration (rclrs-based)
+#[cfg(feature = "ros2")]
+pub struct HumanoidRosNode {
+    node: Arc<Node>,
+    state_publisher: RclPublisher<sensor_msgs::msg::JointState>,
+    imu_publisher: RclPublisher<sensor_msgs::msg::Imu>,
+    pose_publisher: RclPublisher<geometry_msgs::msg::PoseStamped>,
+    command_subscription: Arc<Subscription<std_msgs::msg::Float64MultiArray>>,
+    emergency_stop_subscription: Arc<Subscription<std_msgs::msg::Bool>>,
+    clock: RosClock,
+    timing_policy: TimingPolicy,
+    last_joint_state_pub: Duration,
+    last_imu_pub: Duration,
+    last_pose_pub: Duration,
+    joint_command_buffer: Arc<Mutex<Vec<f64>>>,
+    emergency_stop_active: Arc<Mutex<bool>>,
+    node_name: String,
+    namespace: String,
 }
 
-/// Standard ROS2 frame IDs
-pub mod frames {
-    pub const WORLD: &str = "world";
-    pub const ODOM: &str = "odom";
-    pub const BASE_LINK: &str = "base_link";
-    pub const BASE_FOOTPRINT: &str = "base_footprint";
-    pub const PELVIS: &str = "pelvis";
-    pub const LEFT_FOOT: &str = "left_foot";
-    pub const RIGHT_FOOT: &str = "right_foot";
-}
+#[cfg(feature = "ros2")]
+impl HumanoidRosNode {
+    /// Create a new ROS2 node with the specified name and clock mode
+    pub fn new(node_name: &str, clock_mode: ClockMode) -> Result<Self> {
+        let context = Context::new(std::env::args()).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to create ROS2 context: {:?}", e))
+        })?;
 
-/// Launch file configuration
-#[derive(Debug, Clone)]
-pub struct LaunchConfig {
-    pub node_name: String,
-    pub namespace: String,
-    pub clock_mode: ClockMode,
-    pub timing_policy: TimingPolicy,
-    pub parameters: HashMap<String, String>,
-}
+        let node = Arc::new(Node::new(&context, node_name).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to create ROS2 node: {:?}", e))
+        })?);
 
-impl Default for LaunchConfig {
-    fn default() -> Self {
-        Self {
-            node_name: "humanoid_ros_node".to_string(),
-            namespace: "/humanoid".to_string(),
-            clock_mode: ClockMode::WallTime,
+        let qos = RclQosProfile::default();
+
+        let state_publisher = node.create_publisher("/joint_states", qos).map_err(|e| {
+            HumanoidError::CommunicationError(format!(
+                "Failed to create joint state publisher: {:?}",
+                e
+            ))
+        })?;
+
+        let imu_publisher = node.create_publisher("/imu/data", qos).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to create IMU publisher: {:?}", e))
+        })?;
+
+        let pose_publisher = node.create_publisher("/pose", qos).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to create pose publisher: {:?}", e))
+        })?;
+
+        let joint_command_buffer = Arc::new(Mutex::new(Vec::new()));
+        let cmd_buffer_clone = joint_command_buffer.clone();
+
+        let command_subscription = node
+            .create_subscription(
+                "/joint_commands",
+                qos,
+                move |msg: std_msgs::msg::Float64MultiArray| {
+                    if let Ok(mut buffer) = cmd_buffer_clone.lock() {
+                        *buffer = msg.data.clone();
+                    }
+                },
+            )
+            .map_err(|e| {
+                HumanoidError::CommunicationError(format!(
+                    "Failed to create command subscription: {:?}",
+                    e
+                ))
+            })?;
+
+        let emergency_stop_active = Arc::new(Mutex::new(false));
+        let estop_clone = emergency_stop_active.clone();
+
+        let emergency_stop_subscription = node
+            .create_subscription("/emergency_stop", qos, move |msg: std_msgs::msg::Bool| {
+                if let Ok(mut active) = estop_clone.lock() {
+                    *active = msg.data;
+                    if msg.data {
+                        eprintln!("[ROS2] EMERGENCY STOP ACTIVATED!");
+                    } else {
+                        println!("[ROS2] Emergency stop reset");
+                    }
+                }
+            })
+            .map_err(|e| {
+                HumanoidError::CommunicationError(format!(
+                    "Failed to create emergency stop subscription: {:?}",
+                    e
+                ))
+            })?;
+
+        let clock = RosClock::new(clock_mode);
+        let now = clock.now();
+
+        Ok(Self {
+            node,
+            state_publisher,
+            imu_publisher,
+            pose_publisher,
+            command_subscription: Arc::new(command_subscription),
+            emergency_stop_subscription: Arc::new(emergency_stop_subscription),
+            clock,
             timing_policy: TimingPolicy::default(),
-            parameters: HashMap::new(),
+            last_joint_state_pub: now,
+            last_imu_pub: now,
+            last_pose_pub: now,
+            joint_command_buffer,
+            emergency_stop_active,
+            node_name: node_name.to_string(),
+            namespace: "/".to_string(),
+        })
+    }
+
+    /// Publish robot state to ROS2 topics
+    pub fn publish_state(&mut self, state: &RobotState) -> Result<()> {
+        let now = self.clock.now();
+
+        // Publish joint states if enough time has passed
+        if self.timing_policy.should_publish(
+            self.last_joint_state_pub,
+            now,
+            self.timing_policy.joint_state_rate,
+        ) {
+            let joint_msg = self.create_joint_state_msg(state)?;
+            self.state_publisher.publish(joint_msg).map_err(|e| {
+                HumanoidError::CommunicationError(format!("Failed to publish joint state: {:?}", e))
+            })?;
+            self.last_joint_state_pub = now;
+        }
+
+        // Publish pose if enough time has passed
+        if self
+            .timing_policy
+            .should_publish(self.last_pose_pub, now, self.timing_policy.pose_rate)
+        {
+            let pose_msg = self.create_pose_msg(state)?;
+            self.pose_publisher.publish(pose_msg).map_err(|e| {
+                HumanoidError::CommunicationError(format!("Failed to publish pose: {:?}", e))
+            })?;
+            self.last_pose_pub = now;
+        }
+
+        Ok(())
+    }
+
+    /// Publish IMU data
+    pub fn publish_imu(&mut self, imu_data: &crate::sim::sensors::ImuData) -> Result<()> {
+        let now = self.clock.now();
+
+        if self
+            .timing_policy
+            .should_publish(self.last_imu_pub, now, self.timing_policy.imu_rate)
+        {
+            let imu_msg = self.create_imu_msg(imu_data)?;
+            self.imu_publisher.publish(imu_msg).map_err(|e| {
+                HumanoidError::CommunicationError(format!("Failed to publish IMU: {:?}", e))
+            })?;
+            self.last_imu_pub = now;
+        }
+
+        Ok(())
+    }
+
+    /// Spin the node (process callbacks)
+    pub fn spin(&self, timeout: Duration) -> Result<()> {
+        // Use spin_once with timeout
+        rclrs::spin_once(&self.node, Some(timeout))
+            .map_err(|e| HumanoidError::CommunicationError(format!("Spin failed: {:?}", e)))?;
+        Ok(())
+    }
+
+    /// Shutdown the node
+    pub fn shutdown(self) {
+        println!("[ROS2] Shutting down node: {}", self.node_name);
+        // Node is dropped automatically
+    }
+
+    /// Get the latest joint commands from subscription
+    pub fn get_joint_commands(&self) -> Vec<f64> {
+        self.joint_command_buffer.lock().unwrap().clone()
+    }
+
+    /// Check if emergency stop is active
+    pub fn is_emergency_stop_active(&self) -> bool {
+        *self.emergency_stop_active.lock().unwrap()
+    }
+
+    /// Update simulation time (for ClockMode::Simulation)
+    pub fn update_sim_time(&mut self, time: Duration) {
+        self.clock.update_sim_time(time);
+    }
+
+    /// Get the node name
+    pub fn node_name(&self) -> &str {
+        &self.node_name
+    }
+
+    /// Get the namespace
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    /// Get the clock
+    pub fn clock(&self) -> &RosClock {
+        &self.clock
+    }
+
+    /// Set timing policy
+    pub fn set_timing_policy(&mut self, policy: TimingPolicy) {
+        self.timing_policy = policy;
+    }
+
+    /// Create joint state message from robot state
+    fn create_joint_state_msg(&self, state: &RobotState) -> Result<sensor_msgs::msg::JointState> {
+        let (sec, nanosec) = self.clock.to_ros_time();
+
+        let mut name = Vec::new();
+        let mut position = Vec::new();
+        let mut velocity = Vec::new();
+        let mut effort = Vec::new();
+
+        for joint in state.joints.iter() {
+            name.push(joint.name.clone());
+            position.push(joint.current_position);
+            velocity.push(joint.velocity);
+            effort.push(joint.effort);
+        }
+
+        Ok(sensor_msgs::msg::JointState {
+            header: std_msgs::msg::Header {
+                stamp: builtin_interfaces::msg::Time { sec, nanosec },
+                frame_id: "base_link".to_string(),
+            },
+            name,
+            position,
+            velocity,
+            effort,
+        })
+    }
+
+    /// Create IMU message from IMU data
+    fn create_imu_msg(
+        &self,
+        imu_data: &crate::sim::sensors::ImuData,
+    ) -> Result<sensor_msgs::msg::Imu> {
+        let (sec, nanosec) = self.clock.to_ros_time();
+
+        Ok(sensor_msgs::msg::Imu {
+            header: std_msgs::msg::Header {
+                stamp: builtin_interfaces::msg::Time { sec, nanosec },
+                frame_id: "imu_link".to_string(),
+            },
+            orientation: geometry_msgs::msg::Quaternion {
+                x: imu_data.orientation.coords.x,
+                y: imu_data.orientation.coords.y,
+                z: imu_data.orientation.coords.z,
+                w: imu_data.orientation.coords.w,
+            },
+            orientation_covariance: [0.0; 9],
+            angular_velocity: geometry_msgs::msg::Vector3 {
+                x: imu_data.angular_velocity.x,
+                y: imu_data.angular_velocity.y,
+                z: imu_data.angular_velocity.z,
+            },
+            angular_velocity_covariance: [0.0; 9],
+            linear_acceleration: geometry_msgs::msg::Vector3 {
+                x: imu_data.linear_acceleration.x,
+                y: imu_data.linear_acceleration.y,
+                z: imu_data.linear_acceleration.z,
+            },
+            linear_acceleration_covariance: [0.0; 9],
+        })
+    }
+
+    /// Create pose stamped message from robot state
+    fn create_pose_msg(&self, state: &RobotState) -> Result<geometry_msgs::msg::PoseStamped> {
+        let (sec, nanosec) = self.clock.to_ros_time();
+
+        Ok(geometry_msgs::msg::PoseStamped {
+            header: std_msgs::msg::Header {
+                stamp: builtin_interfaces::msg::Time { sec, nanosec },
+                frame_id: "odom".to_string(),
+            },
+            pose: geometry_msgs::msg::Pose {
+                position: geometry_msgs::msg::Point {
+                    x: state.base_pose.position.x,
+                    y: state.base_pose.position.y,
+                    z: state.base_pose.position.z,
+                },
+                orientation: geometry_msgs::msg::Quaternion {
+                    x: state.base_pose.orientation.coords.x,
+                    y: state.base_pose.orientation.coords.y,
+                    z: state.base_pose.orientation.coords.z,
+                    w: state.base_pose.orientation.coords.w,
+                },
+            },
+        })
+    }
+}
+
+/// Service for control mode switching
+#[cfg(feature = "ros2")]
+pub struct ControlModeService {
+    current_mode: Arc<Mutex<ControlMode>>,
+}
+
+#[cfg(feature = "ros2")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlMode {
+    Position,
+    Velocity,
+    Torque,
+    EmergencyStop,
+}
+
+#[cfg(feature = "ros2")]
+impl ControlModeService {
+    pub fn new() -> Self {
+        Self {
+            current_mode: Arc::new(Mutex::new(ControlMode::Position)),
         }
     }
-}
 
-impl LaunchConfig {
-    /// Load from parameter file (YAML)
-    pub fn from_parameter_file(path: &str) -> Result<Self> {
-        println!("[ROS2] Loading parameters from: {}", path);
-        Ok(Self::default())
+    pub fn get_mode(&self) -> ControlMode {
+        *self.current_mode.lock().unwrap()
     }
 
-    /// Set a parameter
-    pub fn set_parameter(&mut self, key: &str, value: &str) {
-        self.parameters.insert(key.to_string(), value.to_string());
-    }
-
-    /// Get a parameter
-    pub fn get_parameter(&self, key: &str) -> Option<&String> {
-        self.parameters.get(key)
+    pub fn set_mode(&self, mode: ControlMode) {
+        *self.current_mode.lock().unwrap() = mode;
     }
 }
 
-// =============================================================================
-// ROS2 FEATURE IMPLEMENTATION
-// =============================================================================
-// Note: This section requires rclrs and ROS2 message packages to be available.
-// When ROS2 is installed locally, add these dependencies to Cargo.toml:
-//
-// [dependencies]
-// rclrs = { version = "0.4" }
-// rosidl_runtime_rs = { version = "0.4" }
-// sensor_msgs = { version = "0.4" }
-// geometry_msgs = { version = "0.4" }
-// std_msgs = { version = "0.4" }
-//
-// Then enable the "ros2" feature and implement HumanoidRosNode with rclrs.
-// The implementation template is provided in ROS2.md documentation.
+#[cfg(feature = "ros2")]
+impl Default for ControlModeService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -722,12 +1068,6 @@ mod tests {
     }
 
     #[test]
-    fn test_bridge_creation() {
-        let bridge = Ros2Bridge::new("humanoid_node", "/humanoid");
-        assert!(bridge.init().is_ok());
-    }
-
-    #[test]
     fn test_launch_config() {
         let mut config = LaunchConfig::default();
         config.set_parameter("control_rate", "100.0");
@@ -743,5 +1083,12 @@ mod tests {
         assert_eq!(topics::EMERGENCY_STOP, "/emergency_stop");
         assert_eq!(frames::BASE_LINK, "base_link");
         assert_eq!(frames::ODOM, "odom");
+    }
+
+    #[cfg(not(feature = "ros2"))]
+    #[test]
+    fn test_bridge_creation() {
+        let bridge = Ros2Bridge::new("humanoid_node", "/humanoid");
+        assert!(bridge.init().is_ok());
     }
 }

@@ -1,14 +1,19 @@
 //! Asset loading and configuration management
 //!
 //! Provides support for loading scenes from various formats including
-//! TOML, JSON, URDF, and SDF. Includes hot-reloading for development.
+//! TOML, JSON, URDF, SDF, and GLTF. Includes hot-reloading for development.
 
 pub mod config;
+pub mod gltf;
 pub mod loader;
 pub mod sdf;
 pub mod urdf;
 
-pub use config::{ObstacleConfig, RobotConfig, SceneConfig, SimulationConfig, TerrainConfig};
+pub use config::{
+    ControlModeConfig, ObstacleConfig, ObstacleType, RobotConfig, SceneConfig, SimulationConfig,
+    TerrainConfig, TerrainType,
+};
+pub use gltf::{GltfAsset, GltfLoader, GltfMaterial, GltfMesh};
 pub use loader::{AssetFormat, SceneLoader};
 
 use crate::sim::scene::SceneError;

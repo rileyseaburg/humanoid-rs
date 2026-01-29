@@ -55,8 +55,33 @@ pub use sim::physics_backend::{
     PhysicsResult, RigidBodySpec, Shape, Velocity as PhysicsVelocity,
 };
 
+// Re-export sensor framework types at crate root
+pub use sim::sensors::{
+    CameraConfig, CameraData, CameraSensor, ContactState, ForceTorqueConfig, ForceTorqueData,
+    ForceTorqueSensor, ImuConfig, ImuData, ImuSensor, JointEncoderConfig, JointEncoderData,
+    JointEncoderSensor, JointState as PhysicsJointState, NoiseModel, Sensor, SensorData,
+    SensorRegistry, SensorSync, SensorType, SingleJointData, Timestamped, Transform3D,
+    Velocity as SensorVelocity,
+};
+
 #[cfg(feature = "simulator")]
 pub use sim::RapierBackend;
+
+#[cfg(feature = "simulator")]
+pub use sim::deterministic::{
+    DeterministicScheduler, SimulationClock, SimulationControl, Subsystem, TickConfig, TimestepMode,
+};
+
+// Re-export scene and asset types at crate root (simulator only)
+#[cfg(feature = "simulator")]
+pub use sim::assets::config::{
+    ControlModeConfig, DirectionalLightConfig, LightingConfig, ObstacleConfig, ObstacleType,
+    PointLightConfig, RobotConfig, SimulationConfig, TerrainConfig, TerrainType,
+};
+#[cfg(feature = "simulator")]
+pub use sim::assets::{AssetError, AssetFormat, SceneConfig, SceneLoader};
+#[cfg(feature = "simulator")]
+pub use sim::scene::{ActiveScene, NodeType, SceneError, SceneGraph, SceneMember, SceneNode};
 
 use thiserror::Error;
 

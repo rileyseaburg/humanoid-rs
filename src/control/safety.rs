@@ -283,7 +283,11 @@ impl SafetyGuard for EStopGuard {
     }
 
     fn reset(&mut self) {
-        self.reset();
+        if self.estopped {
+            info!("Emergency stop reset");
+            self.estopped = false;
+            self.stop_reason = None;
+        }
     }
 
     fn is_active(&self) -> bool {

@@ -1,6 +1,6 @@
 [package]
 name = "humanoid-rs"
-version = "0.2.0-alpha.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Riley Seaburg <riley@rileyseaburg.com>"]
@@ -52,7 +52,7 @@ physics-rapier = ["simulator"]
 # physics-physx = ["simulator"]
 # physics-custom = []
 unitree = []
-ros2 = []
+ros2 = []  # ROS2 dependencies require local ROS2 installation - see docs/ROS2.md
 rl = []
 mcp = []
 
@@ -115,23 +115,30 @@ anyhow = "1.0"
 # Testing
 mockall = "0.13"
 
-
+# ROS2 integration (optional) - requires ROS2 installation
+# Note: These dependencies require a local ROS2 installation
+# rclrs = { version = "0.4", optional = true }
+# rosidl_runtime_rs = { version = "0.4", optional = true }
+# sensor_msgs = { version = "0.4", optional = true }
+# geometry_msgs = { version = "0.4", optional = true }
+# std_msgs = { version = "0.4", optional = true }
+# builtin_interfaces = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 
-# [[bench]]
-# name = "control_loop"
-# harness = false
-# 
-# [[bench]]
-# name = "physics_step"
-# harness = false
-# 
-# [[bench]]
-# name = "ik_solver"
-# harness = false
+[[bench]]
+name = "control_loop"
+harness = false
+
+[[bench]]
+name = "physics_step"
+harness = false
+
+[[bench]]
+name = "ik_solver"
+harness = false
 
 [[bin]]
 name = "humanoid-sim"

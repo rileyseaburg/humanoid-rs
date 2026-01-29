@@ -194,6 +194,22 @@ pub struct RobotConfig {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
+impl Default for RobotConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            model: String::new(),
+            position: [0.0, 0.0, 0.0],
+            orientation: [0.0, 0.0, 0.0],
+            initial_joints: Vec::new(),
+            control_mode: ControlModeConfig::default(),
+            model_path: None,
+            scale: 1.0,
+            properties: std::collections::HashMap::new(),
+        }
+    }
+}
+
 impl RobotConfig {
     pub fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
