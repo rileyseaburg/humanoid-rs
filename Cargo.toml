@@ -1,15 +1,56 @@
 [package]
 name = "humanoid-rs"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
+rust-version = "1.75"
+authors = ["Riley Seaburg <riley@rileyseaburg.com>"]
 description = "Rust framework for humanoid robotics - simulator and control"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/humanoid-rs"
+repository = "https://github.com/rileyseaburg/humanoid-rs"
+homepage = "https://github.com/rileyseaburg/humanoid-rs"
+documentation = "https://docs.rs/humanoid-rs"
+keywords = ["robotics", "humanoid", "simulation", "unitree", "control"]
+categories = ["science::robotics", "simulation", "hardware-support"]
+exclude = [
+    "*.zip",
+    "changelog-site/",
+    "docs-site/",
+    ".github/",
+    "benches/",
+    "docs/",
+    "examples/",
+    "scripts/",
+    "tests/",
+    "*.md",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "TASK_*",
+    "TEST_*",
+    "PHYSICS_*",
+    "ROS2*",
+    "nul",
+]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.bench]
+debug = true
 
 [features]
 default = ["simulator", "unitree"]
-simulator = ["bevy", "bevy_rapier3d"]
+# Simulator feature enables the Rapier backend
+simulator = ["bevy", "bevy_rapier3d", "rapier3d"]
+# Backend selection (currently only Rapier is available)
+physics-rapier = ["simulator"]
+# Future backends (placeholder for now)
+# physics-physx = ["simulator"]
+# physics-custom = []
 unitree = []
 ros2 = []
 rl = []
@@ -22,13 +63,37 @@ tokio = { version = "1.35", features = ["full", "rt-multi-thread"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.8"
+
+# Scene/asset loading
+quick-xml = { version = "0.31", features = ["serialize"] }
+walkdir = "2.4"
+roxmltree = "0.20"
 
 # Math
 nalgebra = { version = "0.33", features = ["serde-serialize"] }
 
+# Random number generation (for sensor noise)
+rand = "0.8"
+rand_distr = "0.4"
+
 # Simulator (optional)
-bevy = { version = "0.13", optional = true }
+bevy = { version = "0.13", optional = true, default-features = false, features = [
+    "bevy_asset",
+    "bevy_winit", 
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "multi-threaded",
+    "png",
+    "x11",
+    "tonemapping_luts",
+] }
 bevy_rapier3d = { version = "0.26", optional = true }
+rapier3d = { version = "0.22", optional = true }
 
 # Communication
 tonic = "0.12"  # gRPC
@@ -40,6 +105,8 @@ rtic = { version = "2.0", optional = true }
 # Logging
 tracing = "0.1"
 tracing-subscriber = "0.3"
+csv = "1.3"
+bincode = "1.3"
 
 # Error handling
 thiserror = "1.0"
@@ -48,12 +115,22 @@ anyhow = "1.0"
 # Testing
 mockall = "0.13"
 
+
+
 [dev-dependencies]
 tokio-test = "0.4"
-# criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 # [[bench]]
 # name = "control_loop"
+# harness = false
+# 
+# [[bench]]
+# name = "physics_step"
+# harness = false
+# 
+# [[bench]]
+# name = "ik_solver"
 # harness = false
 
 [[bin]]

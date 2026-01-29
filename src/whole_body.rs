@@ -3,8 +3,8 @@
 //! Implements balance control, center of mass tracking, and coordinated motion.
 
 use crate::ik::IkSolver;
-use crate::robot::{JointSet, Pose, RobotState};
-use nalgebra::{DMatrix, DVector, Matrix3, Vector3};
+use crate::robot::RobotState;
+use nalgebra::Vector3;
 use std::time::Duration;
 
 /// Center of mass state
@@ -286,7 +286,7 @@ impl WholeBodyController {
         };
 
         // Compute support polygon
-        let support = SupportPolygon::from_feet(&self.left_foot, &self.right_foot);
+        let _support = SupportPolygon::from_feet(&self.left_foot, &self.right_foot);
 
         // Compute CoM error
         let com_error = self.com_desired.position - current_com.position;

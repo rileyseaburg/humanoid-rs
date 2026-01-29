@@ -3,11 +3,15 @@
 //! Connects to real Unitree G1/H1 robots via their SDK protocol.
 //! Supports both low-level joint control and high-level commands.
 
-use crate::robot::{HumanoidRobot, Pose, RobotState, unitree_g1};
+use crate::control::safety::{
+    CommunicationMonitor, JointLimitGuard, JointLimits, SafetyLevel, SafetyManager,
+};
+use crate::robot::{unitree_g1, HumanoidRobot, Pose, RobotState};
 use crate::{HumanoidError, Result};
 use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
 
 /// Default ports for Unitree communication
 pub const UNITREE_CMD_PORT: u16 = 8082;
@@ -38,6 +42,8 @@ pub struct UnitreeRobot {
     emergency_stopped: bool,
     /// Low-level control enabled (requires special mode)
     low_level_enabled: bool,
+    /// Safety manager for command validation
+    safety_manager: Option<SafetyManager>,
 }
 
 impl UnitreeRobot {
@@ -53,24 +59,27 @@ impl UnitreeRobot {
         };
 
         // Create command socket
-        let cmd_socket = UdpSocket::bind("0.0.0.0:0")
-            .map_err(|e| HumanoidError::CommunicationError(format!("Failed to bind socket: {}", e)))?;
+        let cmd_socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to bind socket: {}", e))
+        })?;
 
-        cmd_socket
-            .set_nonblocking(true)
-            .map_err(|e| HumanoidError::CommunicationError(format!("Failed to set non-blocking: {}", e)))?;
+        cmd_socket.set_nonblocking(true).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to set non-blocking: {}", e))
+        })?;
 
         cmd_socket
             .connect(&robot_addr)
             .map_err(|e| HumanoidError::CommunicationError(format!("Failed to connect: {}", e)))?;
 
         // Create state receiving socket
-        let state_socket = UdpSocket::bind(format!("0.0.0.0:{}", UNITREE_STATE_PORT))
-            .map_err(|e| HumanoidError::CommunicationError(format!("Failed to bind state socket: {}", e)))?;
+        let state_socket =
+            UdpSocket::bind(format!("0.0.0.0:{}", UNITREE_STATE_PORT)).map_err(|e| {
+                HumanoidError::CommunicationError(format!("Failed to bind state socket: {}", e))
+            })?;
 
-        state_socket
-            .set_nonblocking(true)
-            .map_err(|e| HumanoidError::CommunicationError(format!("Failed to set non-blocking: {}", e)))?;
+        state_socket.set_nonblocking(true).map_err(|e| {
+            HumanoidError::CommunicationError(format!("Failed to set non-blocking: {}", e))
+        })?;
 
         println!("Connected to Unitree robot at {}", robot_addr);
 
@@ -78,7 +87,7 @@ impl UnitreeRobot {
             joints: unitree_g1::create_default_joints(),
             ..Default::default()
         };
-        
+
         let mut robot = Self {
             state: Arc::new(Mutex::new(initial_state.clone())),
             cached_state: initial_state,
@@ -89,6 +98,7 @@ impl UnitreeRobot {
             last_cmd_time: Instant::now(),
             emergency_stopped: false,
             low_level_enabled: false,
+            safety_manager: None, // Will be initialized separately
         };
 
         // Send initial handshake
@@ -103,7 +113,7 @@ impl UnitreeRobot {
             joints: unitree_g1::create_default_joints(),
             ..Default::default()
         };
-        
+
         Self {
             state: Arc::new(Mutex::new(initial_state.clone())),
             cached_state: initial_state,
@@ -114,7 +124,69 @@ impl UnitreeRobot {
             last_cmd_time: Instant::now(),
             emergency_stopped: false,
             low_level_enabled: false,
+            safety_manager: None,
         }
+    }
+
+    /// Initialize safety manager with default production-level guards
+    pub fn init_safety(&mut self) {
+        let num_joints = unitree_g1::NUM_JOINTS;
+
+        // Create joint limits from robot state
+        let state = self.state.lock().unwrap();
+        let limits: Vec<JointLimits> = state
+            .joints
+            .iter()
+            .map(|j| JointLimits {
+                min_position: j.limits.min,
+                max_position: j.limits.max,
+                max_velocity: j.limits.max_velocity,
+                max_effort: j.limits.max_effort,
+            })
+            .collect();
+        drop(state);
+
+        self.safety_manager = Some(
+            SafetyManager::with_level(SafetyLevel::Production)
+                .add_guard(JointLimitGuard::new(&limits))
+                .add_guard(CommunicationMonitor::new(Duration::from_millis(100))),
+        );
+
+        info!("Safety manager initialized with {} joints", num_joints);
+    }
+
+    /// Initialize safety manager with custom configuration
+    pub fn init_safety_with_level(&mut self, level: SafetyLevel) {
+        let state = self.state.lock().unwrap();
+        let limits: Vec<JointLimits> = state
+            .joints
+            .iter()
+            .map(|j| JointLimits {
+                min_position: j.limits.min,
+                max_position: j.limits.max,
+                max_velocity: j.limits.max_velocity,
+                max_effort: j.limits.max_effort,
+            })
+            .collect();
+        drop(state);
+
+        self.safety_manager = Some(
+            SafetyManager::with_level(level)
+                .add_guard(JointLimitGuard::new(&limits))
+                .add_guard(CommunicationMonitor::new(Duration::from_millis(100))),
+        );
+
+        info!("Safety manager initialized with level {:?}", level);
+    }
+
+    /// Get mutable reference to safety manager
+    pub fn safety_manager_mut(&mut self) -> Option<&mut SafetyManager> {
+        self.safety_manager.as_mut()
+    }
+
+    /// Check if safety is enabled
+    pub fn safety_enabled(&self) -> bool {
+        self.safety_manager.is_some()
     }
 
     /// Send handshake to robot
@@ -245,7 +317,7 @@ impl UnitreeRobot {
     pub fn time_since_last_cmd(&self) -> Duration {
         self.last_cmd_time.elapsed()
     }
-    
+
     /// Update cached state from internal mutex
     pub fn update_cached_state(&mut self) {
         if let Ok(state) = self.state.lock() {
@@ -267,9 +339,30 @@ impl HumanoidRobot for UnitreeRobot {
             ));
         }
 
-        // Safety check: ensure positions within limits
+        // Apply safety checks if safety manager is configured
+        let positions_to_send = if let Some(ref mut safety) = self.safety_manager {
+            match safety.check_command(
+                positions,
+                &vec![0.0; positions.len()],
+                &vec![0.0; positions.len()],
+                crate::control::safety::ControlMode::Position,
+                self.last_cmd_time.elapsed(),
+            ) {
+                Ok((p, _, _)) => p,
+                Err(e) => {
+                    warn!("Safety check failed for joint positions: {}", e);
+                    return Err(HumanoidError::SafetyStop {
+                        reason: format!("Position safety check failed: {}", e),
+                    });
+                }
+            }
+        } else {
+            positions.to_vec()
+        };
+
+        // Legacy safety check: ensure positions within limits (redundant if safety_manager enabled)
         let state = self.state.lock().unwrap();
-        for (joint, &pos) in state.joints.iter().zip(positions.iter()) {
+        for (joint, &pos) in state.joints.iter().zip(positions_to_send.iter()) {
             if pos < joint.limits.min || pos > joint.limits.max {
                 return Err(HumanoidError::JointLimitExceeded {
                     joint_name: joint.name.clone(),
@@ -281,12 +374,12 @@ impl HumanoidRobot for UnitreeRobot {
         }
         drop(state);
 
-        let cmd = protocol::Command::JointPositions(positions.to_vec());
+        let cmd = protocol::Command::JointPositions(positions_to_send.clone());
         self.send_command(&cmd)?;
 
         // Update local state
         let mut state = self.state.lock().unwrap();
-        state.joints.set_positions(positions);
+        state.joints.set_positions(&positions_to_send);
         Ok(())
     }
 
@@ -296,7 +389,41 @@ impl HumanoidRobot for UnitreeRobot {
                 "Low-level control not enabled".to_string(),
             ));
         }
-        let cmd = protocol::Command::JointVelocities(velocities.to_vec());
+
+        // Apply safety checks if safety manager is configured
+        let velocities_to_send = if let Some(ref mut safety) = self.safety_manager {
+            match safety.check_command(
+                &vec![0.0; velocities.len()],
+                velocities,
+                &vec![0.0; velocities.len()],
+                crate::control::safety::ControlMode::Velocity,
+                self.last_cmd_time.elapsed(),
+            ) {
+                Ok((_, v, _)) => v,
+                Err(e) => {
+                    warn!("Safety check failed for joint velocities: {}", e);
+                    return Err(HumanoidError::SafetyStop {
+                        reason: format!("Velocity safety check failed: {}", e),
+                    });
+                }
+            }
+        } else {
+            velocities.to_vec()
+        };
+
+        // Legacy safety check
+        let state = self.state.lock().unwrap();
+        for (joint, &vel) in state.joints.iter().zip(velocities_to_send.iter()) {
+            if vel.abs() > joint.limits.max_velocity {
+                return Err(HumanoidError::ControlError(format!(
+                    "Joint {} velocity {} exceeds limit {}",
+                    joint.name, vel, joint.limits.max_velocity
+                )));
+            }
+        }
+        drop(state);
+
+        let cmd = protocol::Command::JointVelocities(velocities_to_send);
         self.send_command(&cmd)
     }
 
@@ -306,7 +433,41 @@ impl HumanoidRobot for UnitreeRobot {
                 "Low-level control not enabled".to_string(),
             ));
         }
-        let cmd = protocol::Command::JointTorques(efforts.to_vec());
+
+        // Apply safety checks if safety manager is configured
+        let efforts_to_send = if let Some(ref mut safety) = self.safety_manager {
+            match safety.check_command(
+                &vec![0.0; efforts.len()],
+                &vec![0.0; efforts.len()],
+                efforts,
+                crate::control::safety::ControlMode::Effort,
+                self.last_cmd_time.elapsed(),
+            ) {
+                Ok((_, _, e)) => e,
+                Err(e) => {
+                    warn!("Safety check failed for joint efforts: {}", e);
+                    return Err(HumanoidError::SafetyStop {
+                        reason: format!("Effort safety check failed: {}", e),
+                    });
+                }
+            }
+        } else {
+            efforts.to_vec()
+        };
+
+        // Legacy safety check
+        let state = self.state.lock().unwrap();
+        for (joint, &eff) in state.joints.iter().zip(efforts_to_send.iter()) {
+            if eff.abs() > joint.limits.max_effort {
+                return Err(HumanoidError::ControlError(format!(
+                    "Joint {} effort {} exceeds limit {}",
+                    joint.name, eff, joint.limits.max_effort
+                )));
+            }
+        }
+        drop(state);
+
+        let cmd = protocol::Command::JointTorques(efforts_to_send);
         self.send_command(&cmd)
     }
 
@@ -314,7 +475,7 @@ impl HumanoidRobot for UnitreeRobot {
         // Simplified FK - in practice would use full kinematic chain
         let state = self.state.lock().unwrap();
         let _positions = state.joints.positions();
-        
+
         // Return base pose offset by link position
         // This is a placeholder - real FK would compute through chain
         match link_name {
@@ -335,6 +496,11 @@ impl HumanoidRobot for UnitreeRobot {
         println!("!!! EMERGENCY STOP !!!");
         self.emergency_stopped = true;
 
+        // Trigger safety manager emergency stop if configured
+        if let Some(ref mut safety) = self.safety_manager {
+            safety.trigger_estop("UnitreeRobot::emergency_stop() called");
+        }
+
         // Send stop command multiple times for reliability
         for _ in 0..5 {
             let cmd = protocol::Command::EmergencyStop;
@@ -348,6 +514,11 @@ impl HumanoidRobot for UnitreeRobot {
     fn reset_emergency_stop(&mut self) -> Result<()> {
         println!("Resetting emergency stop...");
         self.emergency_stopped = false;
+
+        // Reset safety manager emergency stop if configured
+        if let Some(ref mut safety) = self.safety_manager {
+            safety.reset_estop();
+        }
 
         let cmd = protocol::Command::ResetEmergencyStop;
         self.send_command(&cmd)?;

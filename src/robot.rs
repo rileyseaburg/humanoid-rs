@@ -1,5 +1,5 @@
-use nalgebra::{Vector3, Quaternion, Isometry3, UnitQuaternion};
-use serde::{Serialize, Deserialize};
+use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// A joint in the robot's kinematic chain
@@ -52,32 +52,32 @@ impl JointSet {
     pub fn new() -> Self {
         Self { joints: Vec::new() }
     }
-    
+
     pub fn add_joint(&mut self, joint: Joint) {
         self.joints.push(joint);
     }
-    
+
     pub fn get_joint(&self, name: &str) -> Option<&Joint> {
         self.joints.iter().find(|j| j.name == name)
     }
-    
+
     pub fn get_joint_mut(&mut self, name: &str) -> Option<&mut Joint> {
         self.joints.iter_mut().find(|j| j.name == name)
     }
-    
+
     pub fn iter(&self) -> impl Iterator<Item = &Joint> {
         self.joints.iter()
     }
-    
+
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Joint> {
         self.joints.iter_mut()
     }
-    
+
     /// Get positions as vector
     pub fn positions(&self) -> Vec<f64> {
         self.joints.iter().map(|j| j.current_position).collect()
     }
-    
+
     /// Set positions from vector
     pub fn set_positions(&mut self, positions: &[f64]) {
         for (joint, &pos) in self.joints.iter_mut().zip(positions.iter()) {
@@ -109,12 +109,9 @@ impl Pose {
             orientation: UnitQuaternion::from_euler_angles(roll, pitch, yaw),
         }
     }
-    
+
     pub fn to_isometry(&self) -> Isometry3<f64> {
-        Isometry3::from_parts(
-            self.position.into(),
-            self.orientation,
-        )
+        Isometry3::from_parts(self.position.into(), self.orientation)
     }
 }
 
@@ -126,7 +123,7 @@ pub struct RobotState {
     pub joints: JointSet,
     pub is_standing: bool,
     pub is_balanced: bool,
-    pub foot_contacts: [bool; 2],  // [left, right]
+    pub foot_contacts: [bool; 2], // [left, right]
 }
 
 impl Default for RobotState {
@@ -146,25 +143,25 @@ impl Default for RobotState {
 pub trait HumanoidRobot {
     /// Get current state
     fn state(&self) -> &RobotState;
-    
+
     /// Send joint position commands
     fn set_joint_positions(&mut self, positions: &[f64]) -> crate::Result<()>;
-    
+
     /// Send joint velocity commands
     fn set_joint_velocities(&mut self, velocities: &[f64]) -> crate::Result<()>;
-    
+
     /// Send joint effort commands
     fn set_joint_efforts(&mut self, efforts: &[f64]) -> crate::Result<()>;
-    
+
     /// Get forward kinematics for a link
     fn forward_kinematics(&self, link_name: &str) -> crate::Result<Pose>;
-    
+
     /// Get number of actuated joints
     fn num_joints(&self) -> usize;
-    
+
     /// Emergency stop
     fn emergency_stop(&mut self) -> crate::Result<()>;
-    
+
     /// Reset emergency stop
     fn reset_emergency_stop(&mut self) -> crate::Result<()>;
 }
@@ -172,36 +169,61 @@ pub trait HumanoidRobot {
 /// Unitree G1 specific configuration
 pub mod unitree_g1 {
     use super::*;
-    
+
     pub const NUM_JOINTS: usize = 29;
-    
+
     pub fn default_joint_names() -> Vec<String> {
         vec![
             // Left leg
-            "left_hip_pitch", "left_hip_roll", "left_hip_yaw",
-            "left_knee", "left_ankle_pitch", "left_ankle_roll",
-            // Right leg  
-            "right_hip_pitch", "right_hip_roll", "right_hip_yaw",
-            "right_knee", "right_ankle_pitch", "right_ankle_roll",
+            "left_hip_pitch",
+            "left_hip_roll",
+            "left_hip_yaw",
+            "left_knee",
+            "left_ankle_pitch",
+            "left_ankle_roll",
+            // Right leg
+            "right_hip_pitch",
+            "right_hip_roll",
+            "right_hip_yaw",
+            "right_knee",
+            "right_ankle_pitch",
+            "right_ankle_roll",
             // Waist
-            "waist_yaw", "waist_pitch", "waist_roll",
+            "waist_yaw",
+            "waist_pitch",
+            "waist_roll",
             // Left arm
-            "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw",
-            "left_elbow", "left_wrist_roll", "left_wrist_pitch", "left_wrist_yaw",
+            "left_shoulder_pitch",
+            "left_shoulder_roll",
+            "left_shoulder_yaw",
+            "left_elbow",
+            "left_wrist_roll",
+            "left_wrist_pitch",
+            "left_wrist_yaw",
             // Right arm
-            "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw",
-            "right_elbow", "right_wrist_roll", "right_wrist_pitch", "right_wrist_yaw",
-        ].into_iter().map(String::from).collect()
+            "right_shoulder_pitch",
+            "right_shoulder_roll",
+            "right_shoulder_yaw",
+            "right_elbow",
+            "right_wrist_roll",
+            "right_wrist_pitch",
+            "right_wrist_yaw",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
     }
-    
+
     pub fn create_default_joints() -> JointSet {
         let mut joints = JointSet::new();
-        
+
         for name in default_joint_names() {
             let limits = JointLimits::default();
             joints.add_joint(Joint {
                 name,
-                joint_type: JointType::Revolute { axis: *Vector3::y_axis() },
+                joint_type: JointType::Revolute {
+                    axis: *Vector3::y_axis(),
+                },
                 parent: None,
                 limits,
                 current_position: 0.0,
@@ -210,7 +232,7 @@ pub mod unitree_g1 {
                 effort: 0.0,
             });
         }
-        
+
         joints
     }
 }

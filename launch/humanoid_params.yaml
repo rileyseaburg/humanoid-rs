@@ -1,0 +1,72 @@
+# humanoid_params.yaml
+# ROS2 parameters for humanoid robot node
+
+humanoid_ros_node:
+  ros__parameters:
+    # Clock configuration
+    clock_mode: "WallTime"  # Options: WallTime, Simulation, External
+    
+    # Publication rates (Hz)
+    joint_state_rate: 100.0
+    imu_rate: 200.0
+    pose_rate: 100.0
+    
+    # Timing configuration
+    real_time_factor: 1.0
+    max_latency_ms: 5
+    
+    # Frame IDs
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    world_frame_id: "world"
+    imu_frame_id: "imu_link"
+    
+    # Joint configuration
+    joint_names:
+      # Left leg
+      - left_hip_pitch
+      - left_hip_roll
+      - left_hip_yaw
+      - left_knee
+      - left_ankle_pitch
+      - left_ankle_roll
+      # Right leg
+      - right_hip_pitch
+      - right_hip_roll
+      - right_hip_yaw
+      - right_knee
+      - right_ankle_pitch
+      - right_ankle_roll
+      # Waist
+      - waist_yaw
+      - waist_pitch
+      - waist_roll
+      # Left arm
+      - left_shoulder_pitch
+      - left_shoulder_roll
+      - left_shoulder_yaw
+      - left_elbow
+      - left_wrist_roll
+      - left_wrist_pitch
+      - left_wrist_yaw
+      # Right arm
+      - right_shoulder_pitch
+      - right_shoulder_roll
+      - right_shoulder_yaw
+      - right_elbow
+      - right_wrist_roll
+      - right_wrist_pitch
+      - right_wrist_yaw
+    
+    # Topic names
+    joint_states_topic: "joint_states"
+    imu_topic: "imu/data"
+    pose_topic: "base_pose"
+    command_topic: "joint_commands"
+    emergency_stop_topic: "emergency_stop"
+    
+    # Safety limits
+    max_joint_velocity: 10.0
+    max_joint_effort: 100.0
+    emergency_stop_on_comm_loss: true
+    comm_timeout_ms: 100

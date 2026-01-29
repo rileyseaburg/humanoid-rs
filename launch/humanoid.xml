@@ -1,0 +1,45 @@
+<!-- humanoid.xml -->
+<!-- ROS2 XML launch file for humanoid robot -->
+
+<launch>
+  <!-- Arguments -->
+  <arg name="node_name" default="humanoid_ros_node" description="Name of the ROS2 node"/>
+  <arg name="namespace" default="/humanoid" description="Namespace for the robot"/>
+  <arg name="clock_mode" default="WallTime" description="Clock mode: WallTime, Simulation, or External"/>
+  <arg name="joint_state_rate" default="100.0" description="Joint state publication rate in Hz"/>
+  <arg name="imu_rate" default="200.0" description="IMU publication rate in Hz"/>
+  <arg name="pose_rate" default="100.0" description="Pose publication rate in Hz"/>
+  <arg name="real_time_factor" default="1.0" description="Real-time factor for simulation"/>
+  <arg name="use_rviz" default="true" description="Launch RViz for visualization"/>
+
+  <!-- Humanoid ROS Node -->
+  <node pkg="humanoid_rs" exec="humanoid_ros_node" name="$(var node_name)" namespace="$(var namespace)">
+    <param name="clock_mode" value="$(var clock_mode)"/>
+    <param name="joint_state_rate" value="$(var joint_state_rate)"/>
+    <param name="imu_rate" value="$(var imu_rate)"/>
+    <param name="pose_rate" value="$(var pose_rate)"/>
+    <param name="real_time_factor" value="$(var real_time_factor)"/>
+    
+    <!-- Topic remappings -->
+    <remap from="joint_states" to="joint_states"/>
+    <remap from="imu/data" to="imu/data"/>
+    <remap from="base_pose" to="base_pose"/>
+    <remap from="joint_commands" to="joint_commands"/>
+    <remap from="emergency_stop" to="emergency_stop"/>
+  </node>
+
+  <!-- Static transform publishers for base frames -->
+  <node pkg="tf2_ros" exec="static_transform_publisher" name="world_to_odom" 
+        args="0 0 0 0 0 0 world odom"/>
+  
+  <node pkg="tf2_ros" exec="static_transform_publisher" name="odom_to_base_footprint" 
+        args="0 0 0 0 0 0 odom base_footprint"/>
+  
+  <node pkg="tf2_ros" exec="static_transform_publisher" name="base_footprint_to_base_link" 
+        args="0 0 0.8 0 0 0 base_footprint base_link"/>
+
+  <!-- Optional: RViz -->
+  <node if="$(var use_rviz)" pkg="rviz2" exec="rviz2" name="rviz2" 
+        args="-d $(find-pkg-share humanoid_rs)/config/humanoid.rviz"/>
+
+</launch>

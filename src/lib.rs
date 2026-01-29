@@ -1,16 +1,22 @@
 //! Humanoid Robotics Framework in Rust
-//! 
+//!
 //! A memory-safe, real-time framework for controlling humanoid robots.
 //! Designed for Unitree G1/H1 but extensible to other platforms.
 
-pub mod robot;
 pub mod control;
 pub mod ik;
-pub mod whole_body;
+pub mod logging;
 pub mod mpc;
+pub mod robot;
+pub mod sdk;
+pub mod sim;
+pub mod whole_body;
 
 #[cfg(feature = "simulator")]
 pub mod simulator;
+
+#[cfg(feature = "simulator")]
+pub mod physics_sim;
 
 #[cfg(feature = "unitree")]
 pub mod unitree;
@@ -24,11 +30,33 @@ pub mod rl;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 
+pub use control::safety::{
+    CommunicationMonitor, ControlMode, EStopGuard, JointLimitGuard, SafetyLevel, SafetyManager,
+    TorqueRampGuard,
+};
+pub use control::{
+    CommandBuffer, ControlCommand, ControlState, Controller, ControllerError, MotionPlanner,
+    Trajectory,
+};
+pub use ik::{IkSolver, IkSolverConfig, PositionTarget, WholeBodyIk};
+pub use logging::{ExportFormat, SimulationLogger};
+pub use mpc::{FootstepPlanner, LipmState, MpcController};
 pub use robot::{HumanoidRobot, Joint, JointSet, Pose};
-pub use control::{Controller, Trajectory, MotionPlanner};
-pub use ik::{IkSolver, WholeBodyIk, PositionTarget, IkSolverConfig};
-pub use whole_body::{WholeBodyController, BalanceRecovery, ComState};
-pub use mpc::{MpcController, FootstepPlanner, LipmState};
+pub use sim::observability::{DebugHooks, ObservabilitySystem, SimulationControl};
+pub use whole_body::{BalanceRecovery, ComState, WholeBodyController};
+
+// Re-export SDK types at crate root for convenience
+pub use sdk::robot::{RobotCapabilities, RobotProfile};
+pub use sdk::{HumanoidSDK, RobotConfig, SDKConfig, SimulationConfig};
+
+// Re-export physics backend types at crate root
+pub use sim::physics_backend::{
+    BodyHandle, BodyType, Contact, JointHandle, JointSpec, JointType, PhysicsBackend, PhysicsError,
+    PhysicsResult, RigidBodySpec, Shape, Velocity as PhysicsVelocity,
+};
+
+#[cfg(feature = "simulator")]
+pub use sim::RapierBackend;
 
 use thiserror::Error;
 
@@ -42,16 +70,16 @@ pub enum HumanoidError {
         min: f64,
         max: f64,
     },
-    
+
     #[error("Communication error: {0}")]
     CommunicationError(String),
-    
+
     #[error("Simulator error: {0}")]
     SimulatorError(String),
-    
+
     #[error("Control error: {0}")]
     ControlError(String),
-    
+
     #[error("Safety stop triggered: {reason}")]
     SafetyStop { reason: String },
 }
@@ -67,6 +95,9 @@ mod tests {
 
     #[test]
     fn test_framework_loads() {
-        assert_eq!(VERSION, "0.1.0");
+        // Version should match Cargo.toml (0.2.0)
+        assert!(!VERSION.is_empty());
+        assert!(VERSION.contains('.'));
+        assert_eq!(VERSION, "0.2.0");
     }
 }

@@ -1,5 +1,11 @@
 # Humanoid-RS 🦾
 
+[![CI](https://github.com/rileyseaburg/humanoid-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rileyseaburg/humanoid-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/humanoid-rs)](https://crates.io/crates/humanoid-rs)
+[![Documentation](https://docs.rs/humanoid-rs/badge.svg)](https://docs.rs/humanoid-rs)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![Rust Version](https://img.shields.io/badge/rustc-1.75+-orange.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
+
 A memory-safe, real-time robotics framework in Rust for humanoid robots.
 
 **Status:** Early development - Simulator working, Unitree integration in progress
@@ -55,36 +61,76 @@ A memory-safe, real-time robotics framework in Rust for humanoid robots.
 
 ## Quick Start
 
-### Simulator (No Hardware Required)
+### 🚀 5-Minute Quick Start
 
 ```bash
-# Clone repo
-git clone https://github.com/yourusername/humanoid-rs
+# 1. Clone and build
+git clone https://github.com/rileyseaburg/humanoid-rs
 cd humanoid-rs
+cargo build --release --features simulator
 
-# Run simulator
+# 2. Run the starter example
+cargo run --example starter --features simulator
+
+# 3. Launch interactive simulator
 cargo run --bin humanoid-sim --features simulator
 ```
 
-This launches a 3D visualization of a Unitree G1 robot using Bevy + Rapier physics.
+### Create Your First Project
 
-#### Simulator Controls
+```bash
+# Create new project
+cargo new my_robot
+cd my_robot
 
+# Add dependency (edit Cargo.toml)
+echo '[dependencies]
+humanoid-rs = { path = "../humanoid-rs", features = ["simulator"] }
+tokio = { version = "1", features = ["full"] }' >> Cargo.toml
+
+# Write starter code
+cat > src/main.rs << 'EOF'
+use humanoid_rs::sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sdk = HumanoidSDK::new();
+    let _sim = sdk.connect_simulator(SimulationConfig::default())?;
+    let robot = sdk.connect_robot(RobotProfile::unitree_g1())?;
+    
+    robot.stand_up()?;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    
+    sdk.shutdown();
+    Ok(())
+}
+EOF
+
+# Run it
+cargo run
+```
+
+📖 **[Complete Quick Start Guide](QUICKSTART.md)** - Full walkthrough with explanations
+
+### Simulator (No Hardware Required)
+
+Launch the 3D visualization:
+
+```bash
+cargo run --bin humanoid-sim --features simulator
+```
+
+**Controls:**
 - **Space** - Stand up
 - **C** - Crouch
-- **1** - Wave animation
-- **2** - T-pose
-- **3** - Lean forward
-- **4** - Sit pose
-- **5** - Jump pose
-- **W** - Toggle walking mode
-- **Q/E** - Rotate camera
+- **1-5** - Pose presets
+- **W** - Walking mode
+- **Arrows** - Camera
 - **ESC** - Exit
 
 ### Connect to Real Robot (Unitree G1)
 
 ```bash
-# Connect to robot on local network
 cargo run --bin unitree-bridge --features unitree -- 192.168.123.104:8080
 ```
 

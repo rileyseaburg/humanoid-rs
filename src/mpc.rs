@@ -3,8 +3,7 @@
 //! Implements a simplified MPC controller for walking and balance.
 //! Uses a linear inverted pendulum model (LIPM) for computational efficiency.
 
-use nalgebra::{DMatrix, DVector, Matrix3, Vector3};
-use std::time::Duration;
+use nalgebra::{DMatrix, DVector, Vector3};
 
 /// MPC configuration
 #[derive(Debug, Clone)]

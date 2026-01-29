@@ -1,0 +1,55 @@
+[simulation]
+timestep = 0.001
+gravity = [0.0, -9.81, 0.0]
+friction = 0.8
+
+[[robots]]
+name = "g1_robot"
+model = "unitree_g1"
+position = [0.0, 0.85, 0.0]
+control_mode = "position"
+
+[[terrain]]
+type = "plane"
+friction = 0.8
+
+[[obstacles]]
+name = "platform"
+type = "box"
+size = [2.0, 0.2, 2.0]
+position = [3.0, 0.1, 0.0]
+color = [0.6, 0.6, 0.6]
+static = true
+
+[[obstacles]]
+name = "wall_1"
+type = "box"
+size = [0.2, 1.0, 3.0]
+position = [5.0, 0.5, 0.0]
+color = [0.7, 0.5, 0.3]
+static = true
+
+[[obstacles]]
+name = "wall_2"
+type = "box"
+size = [3.0, 1.0, 0.2]
+position = [3.5, 0.5, 2.0]
+color = [0.7, 0.5, 0.3]
+static = true
+
+[[obstacles]]
+name = "wall_3"
+type = "box"
+size = [3.0, 1.0, 0.2]
+position = [3.5, 0.5, -2.0]
+color = [0.7, 0.5, 0.3]
+static = true
+
+[lighting]
+ambient = 0.4
+
+[[lighting.directional]]
+direction = [-0.5, -1.0, -0.3]
+intensity = 1.2
+color = [1.0, 1.0, 0.95]
+shadows = true

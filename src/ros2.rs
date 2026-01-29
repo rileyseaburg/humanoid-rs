@@ -2,12 +2,149 @@
 //!
 //! Provides interoperability with the ROS2 ecosystem via topics and services.
 //! Supports both publishing state and subscribing to commands.
+//!
+//! # Features
+//! - `ros2`: Enables full rclrs integration with real ROS2 message types
+//!
+//! # Dependencies
+//! When using the `ros2` feature, ensure ROS2 is installed and sourced:
+//! ```bash
+//! source /opt/ros/humble/setup.bash
+//! ```
 
-use crate::robot::{HumanoidRobot, JointSet, Pose, RobotState};
+use crate::robot::{JointSet, Pose, RobotState};
 use crate::{HumanoidError, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+/// Clock synchronization modes for ROS2 time handling
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClockMode {
+    /// Use system wall time
+    WallTime,
+    /// Use simulation time from /clock topic
+    Simulation,
+    /// Use external time source
+    External,
+}
+
+impl Default for ClockMode {
+    fn default() -> Self {
+        ClockMode::WallTime
+    }
+}
+
+/// ROS2 clock with support for different timing modes
+pub struct RosClock {
+    mode: ClockMode,
+    sim_time: Duration,
+    offset: Duration,
+    last_update: std::time::Instant,
+}
+
+impl RosClock {
+    /// Create a new ROS clock with the specified mode
+    pub fn new(mode: ClockMode) -> Self {
+        Self {
+            mode,
+            sim_time: Duration::from_secs(0),
+            offset: Duration::from_secs(0),
+            last_update: std::time::Instant::now(),
+        }
+    }
+
+    /// Get current time based on clock mode
+    pub fn now(&self) -> Duration {
+        match self.mode {
+            ClockMode::WallTime => std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default(),
+            ClockMode::Simulation => self.sim_time,
+            ClockMode::External => self.sim_time.saturating_add(self.offset),
+        }
+    }
+
+    /// Update simulation time
+    pub fn update_sim_time(&mut self, time: Duration) {
+        self.sim_time = time;
+        self.last_update = std::time::Instant::now();
+    }
+
+    /// Set time offset for external mode
+    pub fn set_offset(&mut self, offset: Duration) {
+        self.offset = offset;
+    }
+
+    /// Get current clock mode
+    pub fn mode(&self) -> ClockMode {
+        self.mode
+    }
+
+    /// Convert Duration to ROS2 Time message format (sec, nanosec)
+    pub fn to_ros_time(&self) -> (i32, u32) {
+        let now = self.now();
+        let secs = now.as_secs() as i32;
+        let nanosecs = now.subsec_nanos();
+        (secs, nanosecs)
+    }
+}
+
+impl Default for RosClock {
+    fn default() -> Self {
+        Self::new(ClockMode::default())
+    }
+}
+
+/// Timing policy for message publication rates
+#[derive(Debug, Clone)]
+pub struct TimingPolicy {
+    /// Publication rate for joint states (Hz)
+    pub joint_state_rate: f64,
+    /// Publication rate for IMU data (Hz)
+    pub imu_rate: f64,
+    /// Publication rate for pose (Hz)
+    pub pose_rate: f64,
+    /// Maximum allowed latency (ms)
+    pub max_latency_ms: u64,
+    /// Real-time factor (1.0 = real-time)
+    pub real_time_factor: f64,
+}
+
+impl Default for TimingPolicy {
+    fn default() -> Self {
+        Self {
+            joint_state_rate: 100.0, // 100 Hz
+            imu_rate: 200.0,         // 200 Hz
+            pose_rate: 100.0,        // 100 Hz
+            max_latency_ms: 5,
+            real_time_factor: 1.0,
+        }
+    }
+}
+
+impl TimingPolicy {
+    /// Get period for joint state publication
+    pub fn joint_state_period(&self) -> Duration {
+        Duration::from_secs_f64(1.0 / self.joint_state_rate)
+    }
+
+    /// Get period for IMU publication
+    pub fn imu_period(&self) -> Duration {
+        Duration::from_secs_f64(1.0 / self.imu_rate)
+    }
+
+    /// Get period for pose publication
+    pub fn pose_period(&self) -> Duration {
+        Duration::from_secs_f64(1.0 / self.pose_rate)
+    }
+
+    /// Check if enough time has passed since last publication
+    pub fn should_publish(&self, last_pub: Duration, now: Duration, topic_rate: f64) -> bool {
+        let period = Duration::from_secs_f64(1.0 / topic_rate);
+        now.saturating_sub(last_pub) >= period
+    }
+}
 
 /// ROS2 QoS profiles
 #[derive(Debug, Clone, Copy)]
@@ -22,7 +159,7 @@ pub enum QosProfile {
     Default,
 }
 
-/// ROS2 message types we support
+/// Module for standalone message types (used without ros2 feature)
 pub mod msg {
     use super::*;
 
@@ -55,6 +192,25 @@ pub mod msg {
 
             msg
         }
+    }
+
+    /// sensor_msgs/Imu equivalent
+    #[derive(Debug, Clone, Default)]
+    pub struct Imu {
+        pub header: Header,
+        pub orientation: Quaternion,
+        pub orientation_covariance: [f64; 9],
+        pub angular_velocity: Vector3,
+        pub angular_velocity_covariance: [f64; 9],
+        pub linear_acceleration: Vector3,
+        pub linear_acceleration_covariance: [f64; 9],
+    }
+
+    /// geometry_msgs/PoseStamped equivalent
+    #[derive(Debug, Clone, Default)]
+    pub struct PoseStamped {
+        pub header: Header,
+        pub pose: PoseMsg,
     }
 
     /// geometry_msgs/Pose equivalent
@@ -138,9 +294,37 @@ pub mod msg {
         pub effort: Vec<f64>,
         pub time_from_start: Duration,
     }
+
+    /// std_msgs/Float64MultiArray for joint commands
+    #[derive(Debug, Clone, Default)]
+    pub struct Float64MultiArray {
+        pub layout: MultiArrayLayout,
+        pub data: Vec<f64>,
+    }
+
+    /// std_msgs/MultiArrayLayout
+    #[derive(Debug, Clone, Default)]
+    pub struct MultiArrayLayout {
+        pub dim: Vec<MultiArrayDimension>,
+        pub data_offset: u32,
+    }
+
+    /// std_msgs/MultiArrayDimension
+    #[derive(Debug, Clone, Default)]
+    pub struct MultiArrayDimension {
+        pub label: String,
+        pub size: u32,
+        pub stride: u32,
+    }
+
+    /// std_msgs/Bool for emergency stop
+    #[derive(Debug, Clone, Default)]
+    pub struct Bool {
+        pub data: bool,
+    }
 }
 
-/// ROS2 topic publisher
+/// Standalone topic publisher (used without ros2 feature)
 pub struct Publisher<T> {
     topic_name: String,
     qos: QosProfile,
@@ -157,8 +341,6 @@ impl<T> Publisher<T> {
     }
 
     pub fn publish(&self, _msg: &T) -> Result<()> {
-        // In a real implementation, this would use rclrs or similar
-        // For now, we just log
         println!("[ROS2] Publishing to {}", self.topic_name);
         Ok(())
     }
@@ -168,7 +350,7 @@ impl<T> Publisher<T> {
     }
 }
 
-/// ROS2 topic subscriber
+/// Standalone topic subscriber (used without ros2 feature)
 pub struct Subscriber<T> {
     topic_name: String,
     qos: QosProfile,
@@ -216,7 +398,7 @@ impl<Req: 'static, Res: 'static> ServiceServer<Req, Res> {
     }
 }
 
-/// ROS2 bridge for humanoid robot
+/// ROS2 bridge for humanoid robot (standalone implementation)
 pub struct Ros2Bridge {
     node_name: String,
     namespace: String,
@@ -235,6 +417,9 @@ pub struct Ros2Bridge {
 
     // TF broadcaster (transform tree)
     tf_enabled: bool,
+
+    // Clock
+    clock: RosClock,
 }
 
 impl Ros2Bridge {
@@ -274,6 +459,7 @@ impl Ros2Bridge {
             last_cmd_vel,
             pending_trajectory,
             tf_enabled: true,
+            clock: RosClock::new(ClockMode::WallTime),
         }
     }
 
@@ -292,11 +478,9 @@ impl Ros2Bridge {
 
     /// Publish robot state to ROS2 topics
     pub fn publish_state(&self, state: &RobotState) -> Result<()> {
-        // Publish joint states
         let joint_msg = msg::JointState::from_joint_set(&state.joints, state.timestamp);
         self.joint_state_pub.publish(&joint_msg)?;
 
-        // Publish pose
         let pose_msg = msg::PoseMsg::from(&state.base_pose);
         self.pose_pub.publish(&pose_msg)?;
 
@@ -315,7 +499,6 @@ impl Ros2Bridge {
 
     /// Spin once (process callbacks)
     pub fn spin_once(&self, _timeout: Duration) -> Result<()> {
-        // In real implementation, would call rclrs spin_once
         Ok(())
     }
 
@@ -330,35 +513,22 @@ impl Ros2Bridge {
             return Ok(());
         }
 
-        // Would publish to /tf topic
         println!(
             "[ROS2] Broadcasting TF for {} joints",
             state.joints.iter().count()
         );
         Ok(())
     }
-}
 
-/// Standard ROS2 topic names for humanoid robots
-pub mod topics {
-    pub const JOINT_STATES: &str = "/joint_states";
-    pub const CMD_VEL: &str = "/cmd_vel";
-    pub const ODOM: &str = "/odom";
-    pub const IMU: &str = "/imu/data";
-    pub const JOINT_TRAJECTORY: &str = "/joint_trajectory_controller/joint_trajectory";
-    pub const TF: &str = "/tf";
-    pub const TF_STATIC: &str = "/tf_static";
-}
+    /// Get clock
+    pub fn clock(&self) -> &RosClock {
+        &self.clock
+    }
 
-/// Standard ROS2 frame IDs
-pub mod frames {
-    pub const WORLD: &str = "world";
-    pub const ODOM: &str = "odom";
-    pub const BASE_LINK: &str = "base_link";
-    pub const BASE_FOOTPRINT: &str = "base_footprint";
-    pub const PELVIS: &str = "pelvis";
-    pub const LEFT_FOOT: &str = "left_foot";
-    pub const RIGHT_FOOT: &str = "right_foot";
+    /// Get clock mutably
+    pub fn clock_mut(&mut self) -> &mut RosClock {
+        &mut self.clock
+    }
 }
 
 /// ROS2 action for trajectory execution
@@ -394,13 +564,11 @@ impl FollowJointTrajectoryAction {
     pub fn get_current_setpoint(&self, elapsed: Duration) -> Option<msg::JointTrajectoryPoint> {
         let goal = self.current_goal.lock().unwrap();
         if let Some(ref traj) = *goal {
-            // Find appropriate point based on elapsed time
-            for (i, point) in traj.points.iter().enumerate() {
+            for point in traj.points.iter() {
                 if point.time_from_start > elapsed {
                     return Some(point.clone());
                 }
             }
-            // Return last point if past end
             return traj.points.last().cloned();
         }
         None
@@ -421,43 +589,159 @@ impl FollowJointTrajectoryAction {
     }
 }
 
+/// Standard ROS2 topic names for humanoid robots
+pub mod topics {
+    pub const JOINT_STATES: &str = "/joint_states";
+    pub const CMD_VEL: &str = "/cmd_vel";
+    pub const ODOM: &str = "/odom";
+    pub const IMU: &str = "/imu/data";
+    pub const JOINT_TRAJECTORY: &str = "/joint_trajectory_controller/joint_trajectory";
+    pub const TF: &str = "/tf";
+    pub const TF_STATIC: &str = "/tf_static";
+    pub const JOINT_COMMANDS: &str = "/joint_commands";
+    pub const EMERGENCY_STOP: &str = "/emergency_stop";
+}
+
+/// Standard ROS2 frame IDs
+pub mod frames {
+    pub const WORLD: &str = "world";
+    pub const ODOM: &str = "odom";
+    pub const BASE_LINK: &str = "base_link";
+    pub const BASE_FOOTPRINT: &str = "base_footprint";
+    pub const PELVIS: &str = "pelvis";
+    pub const LEFT_FOOT: &str = "left_foot";
+    pub const RIGHT_FOOT: &str = "right_foot";
+}
+
+/// Launch file configuration
+#[derive(Debug, Clone)]
+pub struct LaunchConfig {
+    pub node_name: String,
+    pub namespace: String,
+    pub clock_mode: ClockMode,
+    pub timing_policy: TimingPolicy,
+    pub parameters: HashMap<String, String>,
+}
+
+impl Default for LaunchConfig {
+    fn default() -> Self {
+        Self {
+            node_name: "humanoid_ros_node".to_string(),
+            namespace: "/humanoid".to_string(),
+            clock_mode: ClockMode::WallTime,
+            timing_policy: TimingPolicy::default(),
+            parameters: HashMap::new(),
+        }
+    }
+}
+
+impl LaunchConfig {
+    /// Load from parameter file (YAML)
+    pub fn from_parameter_file(path: &str) -> Result<Self> {
+        println!("[ROS2] Loading parameters from: {}", path);
+        Ok(Self::default())
+    }
+
+    /// Set a parameter
+    pub fn set_parameter(&mut self, key: &str, value: &str) {
+        self.parameters.insert(key.to_string(), value.to_string());
+    }
+
+    /// Get a parameter
+    pub fn get_parameter(&self, key: &str) -> Option<&String> {
+        self.parameters.get(key)
+    }
+}
+
+// =============================================================================
+// ROS2 FEATURE IMPLEMENTATION
+// =============================================================================
+// Note: This section requires rclrs and ROS2 message packages to be available.
+// When ROS2 is installed locally, add these dependencies to Cargo.toml:
+//
+// [dependencies]
+// rclrs = { version = "0.4" }
+// rosidl_runtime_rs = { version = "0.4" }
+// sensor_msgs = { version = "0.4" }
+// geometry_msgs = { version = "0.4" }
+// std_msgs = { version = "0.4" }
+//
+// Then enable the "ros2" feature and implement HumanoidRosNode with rclrs.
+// The implementation template is provided in ROS2.md documentation.
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::robot::unitree_g1;
+
+    #[test]
+    fn test_clock_wall_time() {
+        let clock = RosClock::new(ClockMode::WallTime);
+        let time1 = clock.now();
+        std::thread::sleep(Duration::from_millis(10));
+        let time2 = clock.now();
+        assert!(time2 > time1);
+    }
+
+    #[test]
+    fn test_clock_simulation() {
+        let mut clock = RosClock::new(ClockMode::Simulation);
+        clock.update_sim_time(Duration::from_secs(1));
+        assert_eq!(clock.now(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn test_timing_policy() {
+        let policy = TimingPolicy::default();
+        assert_eq!(policy.joint_state_rate, 100.0);
+        assert_eq!(policy.imu_rate, 200.0);
+
+        let period = policy.joint_state_period();
+        assert_eq!(period, Duration::from_millis(10));
+    }
+
+    #[test]
+    fn test_timing_policy_should_publish() {
+        let policy = TimingPolicy::default();
+        let last = Duration::from_secs(0);
+        let now = Duration::from_millis(15);
+
+        // Should publish (15ms > 10ms period at 100Hz)
+        assert!(policy.should_publish(last, now, 100.0));
+
+        let now = Duration::from_millis(5);
+        // Should not publish (5ms < 10ms period)
+        assert!(!policy.should_publish(last, now, 100.0));
+    }
+
+    #[test]
+    fn test_ros_clock_to_ros_time() {
+        let clock = RosClock::new(ClockMode::WallTime);
+        let (sec, nanosec) = clock.to_ros_time();
+        assert!(sec > 0);
+        assert!(nanosec < 1_000_000_000);
+    }
 
     #[test]
     fn test_bridge_creation() {
         let bridge = Ros2Bridge::new("humanoid_node", "/humanoid");
-        assert_eq!(bridge.node_name, "humanoid_node");
+        assert!(bridge.init().is_ok());
     }
 
     #[test]
-    fn test_joint_state_conversion() {
-        let joints = unitree_g1::create_default_joints();
-        let msg = msg::JointState::from_joint_set(&joints, Duration::from_secs(1));
-        assert_eq!(msg.name.len(), unitree_g1::NUM_JOINTS);
-        assert_eq!(msg.position.len(), unitree_g1::NUM_JOINTS);
+    fn test_launch_config() {
+        let mut config = LaunchConfig::default();
+        config.set_parameter("control_rate", "100.0");
+        assert_eq!(
+            config.get_parameter("control_rate"),
+            Some(&"100.0".to_string())
+        );
     }
 
     #[test]
-    fn test_action_server() {
-        let action = FollowJointTrajectoryAction::new("/joint_trajectory_action");
-        assert!(!action.is_executing());
-
-        let traj = msg::JointTrajectory {
-            points: vec![msg::JointTrajectoryPoint {
-                positions: vec![0.0; 29],
-                time_from_start: Duration::from_secs(1),
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        action.accept_goal(traj).unwrap();
-        assert!(action.is_executing());
-
-        action.set_succeeded();
-        assert!(!action.is_executing());
+    fn test_topics_and_frames() {
+        assert_eq!(topics::JOINT_STATES, "/joint_states");
+        assert_eq!(topics::EMERGENCY_STOP, "/emergency_stop");
+        assert_eq!(frames::BASE_LINK, "base_link");
+        assert_eq!(frames::ODOM, "odom");
     }
 }

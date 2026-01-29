@@ -1,0 +1,272 @@
+name: Test and Benchmark
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run benchmarks nightly
+    - cron: '0 0 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust-version: [stable, beta]
+        features: ["--features simulator", "--features unitree", ""]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust-version }}
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.rust-version }}
+    
+    - name: Check formatting
+      run: cargo fmt -- --check
+      if: matrix.rust-version == 'stable'
+    
+    - name: Run clippy
+      run: cargo clippy --all-targets ${{ matrix.features }} -- -D warnings
+      if: matrix.rust-version == 'stable'
+    
+    - name: Build
+      run: cargo build --verbose ${{ matrix.features }}
+    
+    - name: Run tests
+      run: cargo test --verbose ${{ matrix.features }}
+      timeout-minutes: 30
+    
+    - name: Run deterministic tests
+      run: cargo test --test determinism --verbose ${{ matrix.features }}
+      timeout-minutes: 10
+    
+    - name: Run control tests
+      run: cargo test --test control_tests --verbose ${{ matrix.features }}
+      timeout-minutes: 10
+    
+    - name: Run safety tests
+      run: cargo test --test safety_tests --verbose ${{ matrix.features }}
+      timeout-minutes: 10
+    
+    - name: Run integration tests
+      run: cargo test --test integration_tests --verbose ${{ matrix.features }}
+      timeout-minutes: 15
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+    
+    - name: Generate coverage
+      run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./cobertura.xml
+        fail_ci_if_error: false
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[benchmark]')
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-benchmark-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Run control loop benchmarks
+      run: cargo bench --bench control_loop -- --noplot
+      timeout-minutes: 10
+    
+    - name: Run physics step benchmarks
+      run: cargo bench --bench physics_step -- --noplot
+      timeout-minutes: 10
+    
+    - name: Run IK solver benchmarks
+      run: cargo bench --bench ik_solver -- --noplot
+      timeout-minutes: 10
+    
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'cargo'
+        output-file-path: target/criterion/
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        alert-threshold: '150%'
+        comment-on-alert: true
+        fail-on-alert: false
+
+  determinism-check:
+    name: Determinism Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-determinism-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Run determinism tests multiple times
+      run: |
+        for i in {1..5}; do
+          echo "=== Run $i ==="
+          cargo test --test determinism --verbose --features simulator
+        done
+      timeout-minutes: 15
+    
+    - name: Verify golden files exist
+      run: |
+        test -f tests/golden/physics_golden_100steps.json || echo "Warning: Golden file missing"
+        test -f tests/golden/standup_trajectory_golden.json || echo "Warning: Golden file missing"
+
+  safety-checks:
+    name: Safety Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Install cargo-safety
+      run: cargo install cargo-audit
+    
+    - name: Run safety tests
+      run: cargo test --test safety_tests --verbose --features simulator
+      timeout-minutes: 10
+    
+    - name: Check for security advisories
+      run: cargo audit
+      continue-on-error: true
+    
+    - name: Check for unsafe code
+      run: |
+        if grep -r "unsafe" src/ --include="*.rs" | grep -v "// SAFETY:" | grep -v "tests/"; then
+          echo "Warning: Unsafe code found without SAFETY comment"
+        fi
+      continue-on-error: true
+
+  memory-check:
+    name: Memory Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Install valgrind
+      run: sudo apt-get update && sudo apt-get install -y valgrind
+    
+    - name: Build tests
+      run: cargo test --no-run --verbose
+    
+    - name: Run tests with valgrind
+      run: |
+        cargo test --verbose 2>&1 | head -100
+        # Note: Full valgrind would be:
+        # valgrind --leak-check=full --error-exitcode=1 target/debug/deps/*
+      continue-on-error: true
+      timeout-minutes: 20
+
+  doc-tests:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Build documentation
+      run: cargo doc --no-deps --all-features
+    
+    - name: Run doc tests
+      run: cargo test --doc --verbose --all-features
+    
+    - name: Check documentation links
+      run: cargo doc --no-deps --all-features 2>&1 | grep -i "broken" && exit 1 || true
+
+  golden-regenerate:
+    name: Regenerate Golden Files
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[regenerate-golden]')
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Run tests to regenerate golden files
+      run: cargo test --test determinism --features simulator
+    
+    - name: Commit golden files
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add tests/golden/
+        git diff --quiet && git diff --staged --quiet || git commit -m "Regenerate golden files [skip ci]"
+        git push

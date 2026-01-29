@@ -1232,9 +1232,11 @@ impl SimulatedRobot {
         serde_json::to_string(&self.state).unwrap_or_default()
     }
 
-    pub fn load_trajectory(&mut self, trajectory: Trajectory) {
-        if let Some(ref mut controller) = self.controller {
-            controller.set_trajectory(trajectory);
+    pub fn load_trajectory(&mut self, _trajectory: Trajectory) {
+        // TODO: Convert trajectory to ControlCommand and use set_target
+        // This requires implementing trajectory tracking logic
+        if let Some(ref mut _controller) = self.controller {
+            // controller.set_target(...);
         }
     }
 }

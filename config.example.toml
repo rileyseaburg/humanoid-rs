@@ -1,0 +1,105 @@
+# Robot Configuration Template
+# 
+# This is a sample configuration file for Humanoid-RS.
+# Copy this to config.toml and customize for your robot.
+
+[physics]
+# Physics simulation timestep (default: 2ms = 500 Hz)
+timestep_ms = 2
+
+# Gravity vector (m/s²)
+gravity = [0.0, -9.81, 0.0]
+
+[simulation]
+# Real-time factor (1.0 = real-time, 2.0 = 2x speed)
+real_time_factor = 1.0
+
+# Run without 3D visualization (useful for headless/CI)
+headless = false
+
+# Path to scene file (optional)
+# scene_path = "scenes/my_scene.toml"
+
+[robot]
+# Robot model name
+model = "unitree_g1"
+
+# Override joint limits (optional)
+# [[robot.joint_limits]]
+# name = "left_hip_pitch"
+# min = -2.0
+# max = 2.0
+
+[control]
+# Default PD controller gains
+kp = 50.0  # Proportional gain
+kd = 10.0  # Derivative gain
+
+# Maximum control rate (Hz)
+max_rate = 1000
+
+[safety]
+# Safety level: "simulation", "development", or "production"
+level = "simulation"
+
+# Emergency stop timeout (ms)
+estop_timeout_ms = 100
+
+# Joint limit enforcement
+enforce_joint_limits = true
+
+# Torque ramp rate limiting (Nm/s)
+torque_ramp_rate = 100.0
+
+[logging]
+# Log level: "trace", "debug", "info", "warn", "error"
+level = "info"
+
+# Enable structured logging
+structured = true
+
+# Export format: "json", "csv", "binary"
+export_format = "json"
+
+# Maximum log history (number of states)
+max_history = 10000
+
+[sensors]
+# IMU configuration
+[sensors.imu]
+enabled = true
+sample_rate_hz = 1000
+
+# Accelerometer noise model
+[sensors.imu.accelerometer]
+model = "gaussian"
+bias = 0.0
+std_dev = 0.01
+
+# Gyroscope noise model  
+[sensors.imu.gyroscope]
+model = "gaussian"
+bias = 0.0
+std_dev = 0.001
+
+# Joint encoders
+[sensors.encoders]
+enabled = true
+sample_rate_hz = 1000
+position_noise_std_dev = 0.001
+velocity_noise_std_dev = 0.01
+
+# Force/torque sensors
+[sensors.force_torque]
+enabled = true
+sample_rate_hz = 500
+force_noise_std_dev = 1.0
+torque_noise_std_dev = 0.1
+
+# Camera (optional)
+[sensors.camera]
+enabled = false
+width = 640
+height = 480
+fps = 30
+enable_depth = true

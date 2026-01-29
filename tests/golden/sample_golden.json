@@ -1,0 +1,49 @@
+{
+  "timestamp": {
+    "secs": 1,
+    "nanos": 0
+  },
+  "base_pose": {
+    "position": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "orientation": {
+      "w": 1.0,
+      "i": 0.0,
+      "j": 0.0,
+      "k": 0.0
+    }
+  },
+  "joints": {
+    "joints": [
+      {
+        "name": "left_hip_pitch",
+        "joint_type": {
+          "Revolute": {
+            "axis": {
+              "x": 0.0,
+              "y": 1.0,
+              "z": 0.0
+            }
+          }
+        },
+        "parent": null,
+        "limits": {
+          "min": -3.14,
+          "max": 3.14,
+          "max_velocity": 10.0,
+          "max_effort": 100.0
+        },
+        "current_position": 0.05,
+        "target_position": 0.05,
+        "velocity": 0.0,
+        "effort": 0.0
+      }
+    ]
+  },
+  "is_standing": false,
+  "is_balanced": false,
+  "foot_contacts": [false, false]
+}

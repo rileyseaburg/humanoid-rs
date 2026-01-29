@@ -30,3 +30,8 @@ logs/
 dist/
 build/
 out/
+
+# Generated sites and archives
+*.zip
+changelog-site/
+docs-site/
