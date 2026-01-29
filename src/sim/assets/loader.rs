@@ -365,21 +365,6 @@ pub mod util {
     pub fn load_json_str(data: &str) -> Result<SceneGraph> {
         SceneLoader::load_json(data)
     }
-
-    /// Quick load from a URDF string
-    pub fn load_urdf_str(data: &str) -> Result<SceneGraph> {
-        SceneLoader::load_urdf(data)
-    }
-
-    /// Quick load from an SDF string
-    pub fn load_sdf_str(data: &str) -> Result<SceneGraph> {
-        SceneLoader::load_sdf(data)
-    }
-
-    /// Quick load from a GLTF byte slice
-    pub fn load_gltf_bytes(data: &[u8]) -> Result<SceneGraph> {
-        SceneLoader::load_gltf(data)
-    }
 }
 
 // Import the actual loader functions for internal use

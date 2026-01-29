@@ -52,7 +52,7 @@ physics-rapier = ["simulator"]
 # physics-physx = ["simulator"]
 # physics-custom = []
 unitree = []
-ros2 = []  # ROS2 dependencies require local ROS2 installation - see docs/ROS2.md
+ros2 = []
 rl = []
 mcp = []
 
@@ -115,14 +115,14 @@ anyhow = "1.0"
 # Testing
 mockall = "0.13"
 
-# ROS2 integration (optional) - requires ROS2 installation
-# Note: These dependencies require a local ROS2 installation
-# rclrs = { version = "0.4", optional = true }
+# ROS2 integration (optional) - Disabled until proper ROS2 Rust bindings are available
+# rclrs = { version = "0.7", optional = true }
 # rosidl_runtime_rs = { version = "0.4", optional = true }
 # sensor_msgs = { version = "0.4", optional = true }
 # geometry_msgs = { version = "0.4", optional = true }
 # std_msgs = { version = "0.4", optional = true }
-# builtin_interfaces = { version = "0.4", optional = true }
+
+
 
 [dev-dependencies]
 tokio-test = "0.4"

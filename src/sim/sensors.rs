@@ -349,7 +349,7 @@ impl NoiseModel {
 /// This trait defines the interface that physics engines must implement
 /// to support sensor simulations. It provides methods for querying the
 /// physical state of the robot and environment.
-pub trait SensorPhysicsBackend {
+pub trait SensorSensorPhysicsBackend {
     /// Get the base (pelvis) transform and velocity
     fn get_base_state(&self) -> Option<(Transform3D, Velocity)>;
     /// Get joint state by index

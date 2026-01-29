@@ -351,6 +351,7 @@ pub trait PhysicsBackend: Send + Sync {
 pub mod rapier_backend {
     use super::*;
     use rapier3d::prelude::*;
+    use rapier3d::prelude::*;
 
     /// Rapier3D-based physics backend
     ///
@@ -363,7 +364,7 @@ pub mod rapier_backend {
         /// The broad phase
         broad_phase: DefaultBroadPhase,
         /// The narrow phase
-        narrow_phase: DefaultNarrowPhase,
+        narrow_phase: NarrowPhase,
         /// The island manager
         island_manager: IslandManager,
         /// The impulse joint set
@@ -405,7 +406,7 @@ pub mod rapier_backend {
                 pipeline: PhysicsPipeline::new(),
                 integration_parameters,
                 broad_phase: DefaultBroadPhase::new(),
-                narrow_phase: DefaultNarrowPhase::new(),
+                narrow_phase: NarrowPhase::new(),
                 island_manager: IslandManager::new(),
                 impulse_joints: ImpulseJointSet::new(),
                 multibody_joints: MultibodyJointSet::new(),
@@ -815,7 +816,7 @@ pub mod rapier_backend {
             Ok(())
         }
 
-        fn contacts(&self) -> Vec<Contact> {
+        fn contacts(&self) -> Vec<super::Contact> {
             let mut contacts = Vec::new();
 
             for contact_pair in self.narrow_phase.contacts_with(..) {
@@ -834,7 +835,7 @@ pub mod rapier_backend {
                 if let (Some(ba), Some(bb)) = (body_a, body_b) {
                     for manifold in contact_pair.manifolds() {
                         for point in manifold.points() {
-                            contacts.push(Contact {
+                            contacts.push(super::Contact {
                                 body_a: ba,
                                 body_b: bb,
                                 point: Vector3::new(
@@ -1214,10 +1215,6 @@ impl BackendFactory {
             #[cfg(feature = "physics-custom")]
             BackendType::Custom => {
                 unimplemented!("Custom backend not yet implemented")
-            }
-            #[allow(unreachable_patterns)]
-            _ => {
-                panic!("No physics backend available. Enable simulator feature for Rapier support.")
             }
         }
     }
