@@ -1185,6 +1185,8 @@ impl std::fmt::Display for BackendType {
             BackendType::PhysX => write!(f, "PhysX"),
             #[cfg(feature = "physics-custom")]
             BackendType::Custom => write!(f, "Custom"),
+            #[allow(unreachable_patterns)]
+            _ => write!(f, "Unknown"),
         }
     }
 }
