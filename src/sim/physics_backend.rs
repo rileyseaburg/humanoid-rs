@@ -1216,6 +1216,10 @@ impl BackendFactory {
             BackendType::Custom => {
                 unimplemented!("Custom backend not yet implemented")
             }
+            #[allow(unreachable_patterns)]
+            _ => {
+                panic!("No physics backend available. Enable simulator feature for Rapier support.")
+            }
         }
     }
 
